@@ -1,19 +1,19 @@
 {
   "schema_version": 1,
-  "flow_version": "1.0.1",
-  "published_at": "2026-06-19T13:45:48.885109+00:00",
+  "flow_version": "1.0.2",
+  "published_at": "2026-06-19T13:47:56.672445+00:00",
   "files": [
     {
       "path": "config.yaml",
       "source": "files/config.yaml",
-      "sha256": "4e69cfa931bba7ae6874d653999789fcd3db177d6d4efae7e01ac9b580f2c38e",
-      "size": 1874
+      "sha256": "b73601e24d57965070bbfbaace45cf82d6e4c6965cf3f42b4e48f7cb75dabcb7",
+      "size": 1787
     },
     {
       "path": "macro_config.yaml",
       "source": "files/macro_config.yaml",
-      "sha256": "c2aa552dfd6dfa564b0144819a60dad8ba4351cd14c4c1d0f7d9477a53ad91dd",
-      "size": 4443
+      "sha256": "324945192fa6bdf6066f066d2614d9116850d7eaefd6a1e76568b396464c76cc",
+      "size": 4186
     },
     {
       "path": "templates/123.png",
@@ -90,56 +90,56 @@
     {
       "path": "recordings/latest_recording.yaml",
       "source": "files/recordings/latest_recording.yaml",
-      "sha256": "d6d782185a6532a9fa90547c103c3c87565a746d8930cfc101ce737f6726d31e",
-      "size": 5016
+      "sha256": "752c91ca49bbe42e47a42d27b6cb6a9e816294042113b3c3f122aad4a48c83b4",
+      "size": 4724
     },
     {
       "path": "recordings/leaving.yaml",
       "source": "files/recordings/leaving.yaml",
-      "sha256": "2c6c6230b63874fa6281d0f6021a455d2907e7bb9d983db041aef768583c1e43",
-      "size": 3797
+      "sha256": "4a59c2afddfd5abf717384d3d1e15bee2933106491d8efef7ce51aa7101721b4",
+      "size": 3571
     },
     {
       "path": "recordings/leaving_1.yaml",
       "source": "files/recordings/leaving_1.yaml",
-      "sha256": "a118803c978566f724ec6a886c920eb940c43386c9782fc58d28e78b5248da97",
-      "size": 3292
+      "sha256": "42521d988a9f36a47c2e6308f8c9cbef6b8b798bee2c58808c21ea95c34e2140",
+      "size": 3096
     },
     {
       "path": "recordings/leaving_2.yaml",
       "source": "files/recordings/leaving_2.yaml",
-      "sha256": "da1000e184af3546ef939d0a266f917ded11d987659a174fca0f101696455814",
-      "size": 3292
+      "sha256": "5485f65ac562880ba34e23ec2e7d60c57915e154c02c48cbe710dfea96fb8e15",
+      "size": 3096
     },
     {
       "path": "recordings/leaving_3.yaml",
       "source": "files/recordings/leaving_3.yaml",
-      "sha256": "b1c149523b6167caa0a29b92559093c62c33d516c9744b21f2ca0479139916ff",
-      "size": 3521
+      "sha256": "688b8807698cfa2a83014fee34159089fa327be18a0cdd31466ed053ba9f0ce4",
+      "size": 3313
     },
     {
       "path": "recordings/leaving_4.yaml",
       "source": "files/recordings/leaving_4.yaml",
-      "sha256": "dc54b699d1b32d213aacb927587940920f3361b2ba0e7fd95426e013899b60bf",
-      "size": 3422
+      "sha256": "550e090dffb7b300d1c7fca6242b915f16e674f925b14701ce96e0e5e6729d7b",
+      "size": 3220
     },
     {
       "path": "recordings/leaving_5.yaml",
       "source": "files/recordings/leaving_5.yaml",
-      "sha256": "14bc61900706ba0a4506e2ff685a2a94975133888e2eb4180b4d097b644a0709",
-      "size": 2490
+      "sha256": "6c477a42bab7454201c7ee39f71c37b56f99758cd3b2ef7dab16d0f1726c19e6",
+      "size": 2342
     },
     {
       "path": "recordings/leaving_6.yaml",
       "source": "files/recordings/leaving_6.yaml",
-      "sha256": "aee3b3fa9ea18dceda923c9b6199ac1ef12b24a166ba1e86e4423b240dfe9c23",
-      "size": 4521
+      "sha256": "7059db6d3ab8c87f0459948202ad33d9a3c0cef4bbde1ae6965db1a6d1368f6d",
+      "size": 4259
     },
     {
       "path": "recordings/leaving_easy.yaml",
       "source": "files/recordings/leaving_easy.yaml",
-      "sha256": "fc529d662571d465848ec3c4f8142e549245553072c18df17f39d326dca56f18",
-      "size": 3857
+      "sha256": "14f875546f1cb7c64029543ea5a9288bff7a621d8429065a25bd4f879d31e46b",
+      "size": 3625
     },
     {
       "path": "numpad/num0.png",

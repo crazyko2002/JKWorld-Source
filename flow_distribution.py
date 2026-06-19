@@ -8,6 +8,7 @@ import json
 import shutil
 import subprocess
 import tempfile
+import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -88,7 +89,11 @@ def check_and_apply_updates(
         return UpdateResult(False, installed_flow_version(root), 0, "Updates disabled")
     manifest_url = str(settings["manifest_url"])
     timeout = float(settings.get("timeout_seconds", 10))
-    manifest = _download_json(manifest_url, timeout)
+    separator = "&" if "?" in manifest_url else "?"
+    manifest = _download_json(
+        f"{manifest_url}{separator}_={time.time_ns()}",
+        timeout,
+    )
     version = str(manifest.get("flow_version", "0"))
     current = installed_flow_version(root)
     files = manifest.get("files", [])
@@ -102,7 +107,12 @@ def check_and_apply_updates(
         target = _safe_target(root, relative)
         if target.exists() and sha256_file(target) == expected:
             continue
-        source_url = base_url + quote(str(item["source"]), safe="/")
+        source_url = (
+            base_url
+            + quote(str(item["source"]), safe="/")
+            + "?v="
+            + quote(version)
+        )
         data = _download_bytes(source_url, timeout)
         actual = hashlib.sha256(data).hexdigest()
         if actual != expected:
@@ -148,7 +158,11 @@ def prepare_published_bundle(
             relative = path.relative_to(root)
             destination = files_root / relative
             destination.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(path, destination)
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            data = path.read_bytes()
+            if path.suffix.lower() in {".yaml", ".yml", ".json", ".txt"}:
+                data = data.replace(b"\r\n", b"\n").replace(b"\r", b"\n")
+            destination.write_bytes(data)
             manifest_files.append({
                 "path": relative.as_posix(),
                 "source": f"files/{relative.as_posix()}",

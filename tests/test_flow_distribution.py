@@ -45,7 +45,7 @@ def main() -> None:
         original_bytes = distribution._download_bytes
         distribution._download_json = lambda _url, _timeout: manifest
         distribution._download_bytes = lambda url, _timeout: payloads[
-            url.split("https://example.test/", 1)[1]
+            url.split("https://example.test/", 1)[1].split("?", 1)[0]
         ]
         try:
             result = distribution.check_and_apply_updates(
