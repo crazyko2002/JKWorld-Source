@@ -1,9 +1,9 @@
-"""Simplified JK世界 Player for running all published flows together."""
+"""Simplified JKWorld Player for selecting and running published flows."""
 
 from __future__ import annotations
 
+import copy
 import threading
-from pathlib import Path
 
 import customtkinter as ctk
 from pynput import keyboard
@@ -33,17 +33,37 @@ def enabled_rules(config: dict) -> list[dict]:
     ]
 
 
+def flow_name(rule: dict, index: int | None = None) -> str:
+    name = str(rule.get("name") or "").strip()
+    if name:
+        return name
+    if index is None:
+        return "Untitled Flow"
+    return f"Untitled Flow {index + 1}"
+
+
+def selected_rules(config: dict, selected_indexes: set[int]) -> list[dict]:
+    return [
+        rule
+        for index, rule in enumerate(enabled_rules(config))
+        if index in selected_indexes
+    ]
+
+
 class PlayerApp(ctk.CTk):
     def __init__(self):
         super().__init__()
-        self.title("JK世界 冇撚腦ver")
-        self.geometry("680x520")
-        self.minsize(600, 460)
+        self.title("JKWorld NoBrain")
+        self.geometry("720x620")
+        self.minsize(620, 520)
         self.configure(fg_color=BG)
         self.worker: threading.Thread | None = None
         self.stop_event: threading.Event | None = None
         self.config_data: dict = {}
+        self.enabled_flow_rules: list[dict] = []
         self.flow_names: list[str] = []
+        self.flow_checkboxes: list[ctk.CTkCheckBox] = []
+        self.selected_flow_indexes: set[int] = set()
         self.f10_latched = False
         self.listener = keyboard.Listener(
             on_press=self.emergency_key_down,
@@ -60,7 +80,7 @@ class PlayerApp(ctk.CTk):
         header.pack(fill="x", padx=28, pady=(24, 12))
         ctk.CTkLabel(
             header,
-            text="JK世界 冇撚腦ver",
+            text="JKWorld NoBrain",
             font=("Bahnschrift", 27, "bold"),
             text_color=ACCENT,
         ).pack(side="left")
@@ -71,21 +91,59 @@ class PlayerApp(ctk.CTk):
         )
         self.version_label.pack(side="right")
 
-        card = ctk.CTkFrame(self, fg_color=PANEL, corner_radius=14)
+        card = ctk.CTkFrame(self, fg_color=PANEL, corner_radius=8)
         card.pack(fill="x", padx=28, pady=8)
         self.flow_summary = ctk.CTkLabel(
             card,
-            text="全部已啟用 Flow 會一齊執行",
+            text="Loading flows...",
             text_color=TEXT,
             font=("Microsoft JhengHei UI", 15, "bold"),
         )
-        self.flow_summary.pack(anchor="w", padx=22, pady=(20, 18))
+        self.flow_summary.pack(anchor="w", padx=22, pady=(20, 8))
+
+        list_header = ctk.CTkFrame(card, fg_color="transparent")
+        list_header.pack(fill="x", padx=22, pady=(0, 8))
+        ctk.CTkLabel(
+            list_header,
+            text="Available flows",
+            text_color=MUTED,
+            font=("Bahnschrift", 12, "bold"),
+        ).pack(side="left")
+        ctk.CTkButton(
+            list_header,
+            text="ALL",
+            command=self.select_all_flows,
+            fg_color=CARD,
+            hover_color="#2C3439",
+            text_color=TEXT,
+            width=58,
+            height=28,
+        ).pack(side="right", padx=(6, 0))
+        ctk.CTkButton(
+            list_header,
+            text="CLEAR",
+            command=self.clear_flow_selection,
+            fg_color=CARD,
+            hover_color="#2C3439",
+            text_color=TEXT,
+            width=68,
+            height=28,
+        ).pack(side="right")
+
+        self.flow_list = ctk.CTkScrollableFrame(
+            card,
+            fg_color="#111619",
+            corner_radius=8,
+            height=150,
+        )
+        self.flow_list.pack(fill="x", padx=22, pady=(0, 14))
+
         controls = ctk.CTkFrame(card, fg_color="transparent")
         controls.pack(fill="x", padx=22, pady=(0, 20))
         self.start_button = ctk.CTkButton(
             controls,
-            text="START",
-            command=self.start_all,
+            text="START SELECTED",
+            command=self.start_selected,
             fg_color=ACCENT,
             hover_color="#9ED438",
             text_color="#111510",
@@ -106,7 +164,7 @@ class PlayerApp(ctk.CTk):
         status_row.pack(fill="x", padx=28, pady=(10, 4))
         self.status_label = ctk.CTkLabel(
             status_row,
-            text="STOPPED · F10 emergency stop",
+            text="STOPPED | F10 emergency stop",
             text_color=MUTED,
             font=("Bahnschrift", 12, "bold"),
         )
@@ -129,28 +187,104 @@ class PlayerApp(ctk.CTk):
             border_color="#30383D",
             text_color="#B8C4BD",
             font=("Cascadia Mono", 11),
-            corner_radius=10,
+            corner_radius=8,
         )
         self.log_box.pack(fill="both", expand=True, padx=28, pady=(8, 24))
 
     def reload_flows(self) -> None:
+        previous_names = {
+            self.flow_names[index]
+            for index in self.selected_flow_indexes
+            if index < len(self.flow_names)
+        }
         try:
             self.config_data = load_config(CONFIG_PATH)
         except Exception as exc:
             self.config_data = {"rules": []}
             self.log(f"Cannot load Flow: {exc}")
-        enabled = enabled_rules(self.config_data)
-        self.flow_names = [str(rule.get("name", "Untitled Flow")) for rule in enabled]
-        if self.flow_names:
-            self.flow_summary.configure(
-                text=f"{len(self.flow_names)} 個模組會一齊執行"
-            )
+
+        self.enabled_flow_rules = enabled_rules(self.config_data)
+        self.flow_names = [
+            flow_name(rule, index)
+            for index, rule in enumerate(self.enabled_flow_rules)
+        ]
+        if previous_names:
+            self.selected_flow_indexes = {
+                index
+                for index, name in enumerate(self.flow_names)
+                if name in previous_names
+            }
         else:
-            self.flow_summary.configure(text="未有已啟用 Flow")
+            self.selected_flow_indexes = set(range(len(self.flow_names)))
+        if not self.selected_flow_indexes and self.flow_names:
+            self.selected_flow_indexes = set(range(len(self.flow_names)))
+
+        self.render_flow_list()
+        self.refresh_flow_summary()
+
+    def render_flow_list(self) -> None:
+        for widget in self.flow_list.winfo_children():
+            widget.destroy()
+        self.flow_checkboxes = []
+
+        if not self.flow_names:
+            ctk.CTkLabel(
+                self.flow_list,
+                text="No enabled flows found.",
+                text_color=MUTED,
+                anchor="w",
+            ).pack(fill="x", padx=10, pady=10)
+            return
+
+        for index, name in enumerate(self.flow_names):
+            checkbox = ctk.CTkCheckBox(
+                self.flow_list,
+                text=name,
+                command=lambda idx=index: self.toggle_flow(idx),
+                fg_color=ACCENT,
+                hover_color="#9ED438",
+                checkmark_color="#111510",
+                text_color=TEXT,
+                border_color="#52605A",
+            )
+            checkbox.pack(fill="x", padx=10, pady=5)
+            if index in self.selected_flow_indexes:
+                checkbox.select()
+            else:
+                checkbox.deselect()
+            self.flow_checkboxes.append(checkbox)
+
+    def refresh_flow_summary(self) -> None:
+        if self.flow_names:
+            selected_count = len(self.selected_flow_indexes)
+            self.flow_summary.configure(
+                text=f"{selected_count}/{len(self.flow_names)} flows selected"
+            )
+            return
+        self.flow_summary.configure(text="No enabled flows")
+
+    def toggle_flow(self, index: int) -> None:
+        if index in self.selected_flow_indexes:
+            self.selected_flow_indexes.remove(index)
+        else:
+            self.selected_flow_indexes.add(index)
+        self.refresh_flow_summary()
+
+    def select_all_flows(self) -> None:
+        self.selected_flow_indexes = set(range(len(self.flow_names)))
+        for checkbox in self.flow_checkboxes:
+            checkbox.select()
+        self.refresh_flow_summary()
+
+    def clear_flow_selection(self) -> None:
+        self.selected_flow_indexes.clear()
+        for checkbox in self.flow_checkboxes:
+            checkbox.deselect()
+        self.refresh_flow_summary()
 
     def check_updates(self) -> None:
         if self.worker and self.worker.is_alive():
-            self.log("請先停止 Flow 才更新。")
+            self.log("Stop the running flows before checking for updates.")
             return
         self.update_button.configure(state="disabled", text="CHECKING...")
 
@@ -177,13 +311,14 @@ class PlayerApp(ctk.CTk):
 
         threading.Thread(target=work, daemon=True, name="flow-updater").start()
 
-    def start_all(self) -> None:
+    def start_selected(self) -> None:
         if self.worker and self.worker.is_alive():
             return
-        rules = enabled_rules(self.config_data)
+        rules = selected_rules(self.config_data, self.selected_flow_indexes)
         if not rules:
-            self.log("未有可執行 Flow。")
+            self.log("Select at least one flow before starting.")
             return
+
         runtime = copy.deepcopy(self.config_data)
         runtime["rules"] = rules
         save_config(RUNTIME_CONFIG, runtime)
@@ -191,12 +326,12 @@ class PlayerApp(ctk.CTk):
         self.worker = threading.Thread(
             target=self.run_worker,
             daemon=True,
-            name="sightflow-player-engine",
+            name="jkworld-player-engine",
         )
         self.worker.start()
         self.start_button.configure(state="disabled")
         self.status_label.configure(
-            text=f"RUNNING · {len(rules)} FLOWS",
+            text=f"RUNNING | {len(rules)} FLOWS",
             text_color=ACCENT,
         )
 
@@ -211,7 +346,7 @@ class PlayerApp(ctk.CTk):
     def worker_finished(self) -> None:
         self.start_button.configure(state="normal")
         self.status_label.configure(
-            text="STOPPED · F10 emergency stop",
+            text="STOPPED | F10 emergency stop",
             text_color=MUTED,
         )
         self.f10_latched = False

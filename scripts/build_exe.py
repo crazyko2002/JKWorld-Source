@@ -66,9 +66,8 @@ def main() -> None:
         "studio_publisher_gui.py",
         "JK世界 Studio Owner.exe",
     )
-    print(f"Built: {player}")
-    print(f"Built: {studio}")
-    print(f"Built: {publisher}")
+    for output in (player, studio, publisher):
+        print(f"Built: {output.relative_to(ROOT).as_posix()}")
 
 
 if __name__ == "__main__":
