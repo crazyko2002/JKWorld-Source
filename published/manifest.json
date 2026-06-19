@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "flow_version": "1.0.0",
-  "published_at": "2026-06-19T13:38:05.949662+00:00",
+  "flow_version": "1.0.1",
+  "published_at": "2026-06-19T13:45:48.885109+00:00",
   "files": [
     {
       "path": "config.yaml",
