@@ -13,7 +13,7 @@ import customtkinter as ctk
 from macro_recorder import list_recordings
 from pynput import keyboard
 
-from flow_distribution import publish_bundle_to_git
+from flow_distribution import find_git_repository, publish_bundle_to_git
 from screen_detector_prototype import (
     ROOT,
     capture_template,
@@ -1392,7 +1392,8 @@ class FlowApp(ctk.CTk):
             return
         if not self.save_current():
             return
-        if not (ROOT / ".git").exists():
+        repository_root = find_git_repository(ROOT)
+        if repository_root is None:
             messagebox.showerror(
                 "Publish Flow",
                 "目前資料夾不是 Git repository。",
@@ -1403,7 +1404,11 @@ class FlowApp(ctk.CTk):
 
         def work():
             try:
-                manifest = publish_bundle_to_git(ROOT, log=self.log)
+                manifest = publish_bundle_to_git(
+                    ROOT,
+                    log=self.log,
+                    repository_root=repository_root,
+                )
                 self.log(f"Publish complete: {manifest}")
                 self.after(
                     0,

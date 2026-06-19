@@ -67,6 +67,14 @@ def installed_flow_version(root: Path = APP_ROOT) -> str:
     return path.read_text(encoding="utf-8").strip() if path.exists() else "0"
 
 
+def find_git_repository(start: Path = APP_ROOT) -> Path | None:
+    current = start.resolve()
+    for candidate in (current, *current.parents):
+        if (candidate / ".git").exists():
+            return candidate
+    return None
+
+
 def _download_json(url: str, timeout: float) -> dict:
     request = Request(url, headers={
         "User-Agent": "SightFlow-Updater/1",
@@ -167,8 +175,10 @@ def check_and_apply_updates(
 def prepare_published_bundle(
     root: Path = APP_ROOT,
     version: str | None = None,
+    output_root: Path | None = None,
 ) -> Path:
-    published = root / "published"
+    output_root = output_root or root
+    published = output_root / "published"
     if published.exists():
         shutil.rmtree(published)
     files_root = published / "files"
@@ -235,12 +245,22 @@ def publish_bundle_to_git(
     root: Path = APP_ROOT,
     version: str | None = None,
     log: LogFn = print,
+    repository_root: Path | None = None,
 ) -> Path:
-    manifest = prepare_published_bundle(root, version)
-    subprocess.run(["git", "add", "published"], cwd=root, check=True)
+    repository_root = repository_root or find_git_repository(root)
+    if repository_root is None:
+        raise RuntimeError(
+            "找不到 Git repository；請將 Studio 放在 SightFlow repo 裏面使用。"
+        )
+    manifest = prepare_published_bundle(
+        root,
+        version,
+        output_root=repository_root,
+    )
+    subprocess.run(["git", "add", "published"], cwd=repository_root, check=True)
     status = subprocess.run(
         ["git", "diff", "--cached", "--quiet"],
-        cwd=root,
+        cwd=repository_root,
         check=False,
     )
     if status.returncode == 0:
@@ -249,10 +269,10 @@ def publish_bundle_to_git(
     flow_version = json.loads(manifest.read_text(encoding="utf-8"))["flow_version"]
     subprocess.run(
         ["git", "commit", "-m", f"publish flows {flow_version}"],
-        cwd=root,
+        cwd=repository_root,
         check=True,
     )
-    subprocess.run(["git", "push"], cwd=root, check=True)
+    subprocess.run(["git", "push"], cwd=repository_root, check=True)
     log(f"Published Flow version {flow_version}")
     return manifest
 

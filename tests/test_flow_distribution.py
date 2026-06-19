@@ -58,6 +58,11 @@ def main() -> None:
         assert result.version == "1.2.3"
         assert (install / "templates" / "hello.png").read_bytes() == b"template-v1"
         assert distribution.installed_flow_version(install) == "1.2.3"
+
+        nested = root / "dist" / "SightFlowStudio"
+        nested.mkdir(parents=True)
+        (root / ".git").mkdir()
+        assert distribution.find_git_repository(nested) == root
     print("Flow distribution update OK")
 
 
