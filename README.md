@@ -1,13 +1,14 @@
-# SightFlow
+# JK世界
 
-SightFlow 有兩個 Windows 應用：
+JK世界有兩個 Windows 應用：
 
-- `SightFlowPlayer.exe`：簡化版，只選擇及執行已發布 Flow，啟動時自動檢查更新。
-- `SightFlowStudio.exe`：完整 IF / ELSE 編輯器、Recorder、OCR 與 Flow 發布工具。
+- `JK世界 冇撚腦ver.exe`：所有已啟用 Flow 會一齊執行。
+- `JK世界 Studio.exe`：完整編輯器，但沒有 Publish。
+- `JK世界 Studio Owner.exe`：私人版本，包含 Publish，不會公開發布。
 
 ## Source mode
 
-- Player：開啟 `Start SightFlow Player.bat`
+- Player：開啟 `Start JK世界 冇撚腦ver.bat`
 - Studio：開啟 `Start Advanced Flow.bat`
 
 ## Build EXE
@@ -18,8 +19,9 @@ SightFlow 有兩個 Windows 應用：
 
 輸出：
 
-- `dist/SightFlowPlayer/SightFlowPlayer.exe`
-- `dist/SightFlowStudio/SightFlowStudio.exe`
+- `dist/JKWorldNoBrain/JK世界 冇撚腦ver.exe`
+- `dist/JKWorldStudio/JK世界 Studio.exe`
+- `dist/JKWorldStudioOwner/JK世界 Studio Owner.exe`
 
 兩個都係 portable folder，派發時要 zip 整個資料夾，唔可以只拎走 exe。
 

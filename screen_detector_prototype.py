@@ -310,7 +310,7 @@ def run_actions(
             )
             events = macro.get("events", [])
             if not events:
-                raise ValueError("未有錄製內容；請先在 SightFlow Recorder 錄製")
+                raise ValueError("未有錄製內容；請先在 JK世界 Recorder 錄製")
             repeat_count = max(1, int(action.get("repeat_count", 1)))
             repeat_delay = max(0, float(action.get("repeat_delay", 0.5)))
             speed_percent = max(1, float(action.get("speed_percent", 100)))

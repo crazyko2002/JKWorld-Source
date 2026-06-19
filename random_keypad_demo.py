@@ -12,7 +12,7 @@ import numpy as np
 from PIL import Image, ImageTk
 
 
-WINDOW_TITLE = "SightFlow Random Keypad Demo"
+WINDOW_TITLE = "JK世界 Random Keypad Demo"
 CANVAS_WIDTH = 420
 CANVAS_HEIGHT = 500
 QUESTION_REGION = (32, 112, 148, 72)

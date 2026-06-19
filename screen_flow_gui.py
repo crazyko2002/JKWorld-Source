@@ -1,8 +1,9 @@
-"""Visual IF / ELSE flow builder for SightFlow."""
+"""Visual IF / ELSE flow builder for JK世界."""
 
 from __future__ import annotations
 
 import copy
+import os
 import threading
 import time
 from pathlib import Path
@@ -13,7 +14,7 @@ import customtkinter as ctk
 from macro_recorder import list_recordings
 from pynput import keyboard
 
-from flow_distribution import find_git_repository, publish_bundle_to_git
+from flow_distribution import publish_bundle_to_git
 from screen_detector_prototype import (
     ROOT,
     capture_template,
@@ -728,7 +729,11 @@ def dialog_footer(
 class FlowApp(ctk.CTk):
     def __init__(self):
         super().__init__()
-        self.title("SightFlow — IF / ELSE Automation")
+        self.title(
+            "JK世界 Studio Owner"
+            if os.environ.get("JKWORLD_ENABLE_PUBLISH") == "1"
+            else "JK世界 Studio"
+        )
         self.geometry("1280x820")
         self.minsize(1100, 720)
         self.configure(fg_color=BG)
@@ -857,12 +862,14 @@ class FlowApp(ctk.CTk):
             fg_color=RED, hover_color="#DB444A", text_color="#160809",
             command=self.open_recorder,
         ).pack(side="right", padx=6)
-        self.publish_button = ctk.CTkButton(
-            header, text="PUBLISH", width=100, height=38,
-            fg_color=ORANGE, hover_color="#DF8737", text_color="#171009",
-            command=self.publish_flows,
-        )
-        self.publish_button.pack(side="right", padx=6)
+        self.publish_button = None
+        if os.environ.get("JKWORLD_ENABLE_PUBLISH") == "1":
+            self.publish_button = ctk.CTkButton(
+                header, text="PUBLISH", width=100, height=38,
+                fg_color=ORANGE, hover_color="#DF8737", text_color="#171009",
+                command=self.publish_flows,
+            )
+            self.publish_button.pack(side="right", padx=6)
 
         work = ctk.CTkFrame(self, fg_color="transparent")
         work.pack(fill="both", expand=True, padx=22, pady=4)
@@ -1392,22 +1399,16 @@ class FlowApp(ctk.CTk):
             return
         if not self.save_current():
             return
-        repository_root = find_git_repository(ROOT)
-        if repository_root is None:
-            messagebox.showerror(
-                "Publish Flow",
-                "目前資料夾不是 Git repository。",
-                parent=self,
+        if self.publish_button:
+            self.publish_button.configure(
+                state="disabled", text="PUBLISHING..."
             )
-            return
-        self.publish_button.configure(state="disabled", text="PUBLISHING...")
 
         def work():
             try:
                 manifest = publish_bundle_to_git(
                     ROOT,
                     log=self.log,
-                    repository_root=repository_root,
                 )
                 self.log(f"Publish complete: {manifest}")
                 self.after(
@@ -1429,12 +1430,13 @@ class FlowApp(ctk.CTk):
                     ),
                 )
             finally:
-                self.after(
-                    0,
-                    lambda: self.publish_button.configure(
-                        state="normal", text="PUBLISH"
-                    ),
-                )
+                if self.publish_button:
+                    self.after(
+                        0,
+                        lambda: self.publish_button.configure(
+                            state="normal", text="PUBLISH"
+                        ),
+                    )
 
         threading.Thread(
             target=work,

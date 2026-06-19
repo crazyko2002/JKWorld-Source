@@ -9,9 +9,11 @@ $python = Join-Path $venv "Scripts\python.exe"
 & $python -m pip install -q -r (Join-Path $PSScriptRoot "requirements.txt")
 
 if ($args.Count -eq 0) {
-    & $python (Join-Path $PSScriptRoot "screen_flow_gui.py")
+    $env:JKWORLD_ENABLE_PUBLISH = "1"
+    & $python (Join-Path $PSScriptRoot "studio_publisher_gui.py")
 } elseif ($args[0] -eq "--advanced") {
-    & $python (Join-Path $PSScriptRoot "screen_flow_gui.py")
+    $env:JKWORLD_ENABLE_PUBLISH = "1"
+    & $python (Join-Path $PSScriptRoot "studio_publisher_gui.py")
 } else {
     & $python (Join-Path $PSScriptRoot "screen_detector_prototype.py") @args
 }

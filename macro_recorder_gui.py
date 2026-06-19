@@ -45,7 +45,7 @@ class MacroRecorderWindow(ctk.CTkToplevel):
     ):
         super().__init__(master)
         self.on_saved = on_saved
-        self.title("SightFlow Recorder")
+        self.title("JK世界 Recorder")
         self.geometry("760x760")
         self.minsize(680, 650)
         self.configure(fg_color=BG)
@@ -362,7 +362,7 @@ class MacroRecorderWindow(ctk.CTkToplevel):
             title="Load Recording",
             initialdir=str(ROOT / "recordings"),
             filetypes=[
-                ("SightFlow Recording", "*.yaml"),
+                ("JK世界 Recording", "*.yaml"),
                 ("All files", "*.*"),
             ],
         )

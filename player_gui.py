@@ -1,8 +1,7 @@
-"""Simplified SightFlow Player for running published flows."""
+"""Simplified JK世界 Player for running all published flows together."""
 
 from __future__ import annotations
 
-import copy
 import threading
 from pathlib import Path
 
@@ -26,10 +25,18 @@ ORANGE = "#FF9F43"
 RED = "#FF5D62"
 
 
+def enabled_rules(config: dict) -> list[dict]:
+    return [
+        rule
+        for rule in config.get("rules", [])
+        if rule.get("enabled", True)
+    ]
+
+
 class PlayerApp(ctk.CTk):
     def __init__(self):
         super().__init__()
-        self.title("SightFlow Player")
+        self.title("JK世界 冇撚腦ver")
         self.geometry("680x520")
         self.minsize(600, 460)
         self.configure(fg_color=BG)
@@ -53,7 +60,7 @@ class PlayerApp(ctk.CTk):
         header.pack(fill="x", padx=28, pady=(24, 12))
         ctk.CTkLabel(
             header,
-            text="SIGHTFLOW PLAYER",
+            text="JK世界 冇撚腦ver",
             font=("Bahnschrift", 27, "bold"),
             text_color=ACCENT,
         ).pack(side="left")
@@ -66,29 +73,19 @@ class PlayerApp(ctk.CTk):
 
         card = ctk.CTkFrame(self, fg_color=PANEL, corner_radius=14)
         card.pack(fill="x", padx=28, pady=8)
-        ctk.CTkLabel(
+        self.flow_summary = ctk.CTkLabel(
             card,
-            text="選擇要執行的 Flow",
+            text="全部已啟用 Flow 會一齊執行",
             text_color=TEXT,
             font=("Microsoft JhengHei UI", 15, "bold"),
-        ).pack(anchor="w", padx=22, pady=(20, 8))
-        self.flow_var = ctk.StringVar(value="未有 Flow")
-        self.flow_menu = ctk.CTkOptionMenu(
-            card,
-            variable=self.flow_var,
-            values=["未有 Flow"],
-            fg_color=CARD,
-            button_color=ORANGE,
-            text_color=TEXT,
-            height=42,
         )
-        self.flow_menu.pack(fill="x", padx=22, pady=(0, 18))
+        self.flow_summary.pack(anchor="w", padx=22, pady=(20, 18))
         controls = ctk.CTkFrame(card, fg_color="transparent")
         controls.pack(fill="x", padx=22, pady=(0, 20))
         self.start_button = ctk.CTkButton(
             controls,
             text="START",
-            command=self.start_selected,
+            command=self.start_all,
             fg_color=ACCENT,
             hover_color="#9ED438",
             text_color="#111510",
@@ -142,15 +139,14 @@ class PlayerApp(ctk.CTk):
         except Exception as exc:
             self.config_data = {"rules": []}
             self.log(f"Cannot load Flow: {exc}")
-        enabled = [
-            rule for rule in self.config_data.get("rules", [])
-            if rule.get("enabled", True)
-        ]
+        enabled = enabled_rules(self.config_data)
         self.flow_names = [str(rule.get("name", "Untitled Flow")) for rule in enabled]
-        values = self.flow_names or ["未有 Flow"]
-        self.flow_menu.configure(values=values)
-        if self.flow_var.get() not in values:
-            self.flow_var.set(values[0])
+        if self.flow_names:
+            self.flow_summary.configure(
+                text=f"{len(self.flow_names)} 個模組會一齊執行"
+            )
+        else:
+            self.flow_summary.configure(text="未有已啟用 Flow")
 
     def check_updates(self) -> None:
         if self.worker and self.worker.is_alive():
@@ -181,15 +177,10 @@ class PlayerApp(ctk.CTk):
 
         threading.Thread(target=work, daemon=True, name="flow-updater").start()
 
-    def start_selected(self) -> None:
+    def start_all(self) -> None:
         if self.worker and self.worker.is_alive():
             return
-        selected = self.flow_var.get()
-        rules = [
-            copy.deepcopy(rule)
-            for rule in self.config_data.get("rules", [])
-            if str(rule.get("name", "")) == selected
-        ]
+        rules = enabled_rules(self.config_data)
         if not rules:
             self.log("未有可執行 Flow。")
             return
@@ -204,7 +195,10 @@ class PlayerApp(ctk.CTk):
         )
         self.worker.start()
         self.start_button.configure(state="disabled")
-        self.status_label.configure(text=f"RUNNING · {selected}", text_color=ACCENT)
+        self.status_label.configure(
+            text=f"RUNNING · {len(rules)} FLOWS",
+            text_color=ACCENT,
+        )
 
     def run_worker(self) -> None:
         try:

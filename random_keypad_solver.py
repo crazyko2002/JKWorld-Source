@@ -1,4 +1,4 @@
-"""Visual solver restricted to the SightFlow Random Keypad Demo window."""
+"""Visual solver restricted to the JK世界 Random Keypad Demo window."""
 
 from __future__ import annotations
 

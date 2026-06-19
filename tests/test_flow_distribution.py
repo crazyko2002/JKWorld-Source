@@ -59,7 +59,7 @@ def main() -> None:
         assert (install / "templates" / "hello.png").read_bytes() == b"template-v1"
         assert distribution.installed_flow_version(install) == "1.2.3"
 
-        nested = root / "dist" / "SightFlowStudio"
+        nested = root / "dist" / "JKWorldStudio"
         nested.mkdir(parents=True)
         (root / ".git").mkdir()
         assert distribution.find_git_repository(nested) == root

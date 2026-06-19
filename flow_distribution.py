@@ -1,4 +1,4 @@
-"""Publish and update versioned SightFlow data bundles."""
+"""Publish and update versioned JK世界 data bundles."""
 
 from __future__ import annotations
 
@@ -24,13 +24,14 @@ from app_paths import APP_ROOT
 DEFAULT_SETTINGS = {
     "enabled": True,
     "manifest_url": (
-        "https://api.github.com/repos/crazyko2002/SightFlow/"
+        "https://api.github.com/repos/crazyko2002/JKWorld-Downloads/"
         "contents/published/manifest.json?ref=main"
     ),
     "asset_base_url": (
         "https://raw.githubusercontent.com/"
-        "crazyko2002/SightFlow/main/published/"
+        "crazyko2002/JKWorld-Downloads/main/published/"
     ),
+    "distribution_repository": "https://github.com/crazyko2002/JKWorld-Downloads.git",
     "timeout_seconds": 10,
 }
 PUBLISH_ITEMS = ("config.yaml", "macro_config.yaml", "templates", "recordings", "numpad")
@@ -77,7 +78,7 @@ def find_git_repository(start: Path = APP_ROOT) -> Path | None:
 
 def _download_json(url: str, timeout: float) -> dict:
     request = Request(url, headers={
-        "User-Agent": "SightFlow-Updater/1",
+        "User-Agent": "JKWorld-Updater/1",
         "Accept": "application/vnd.github.raw+json",
     })
     with urlopen(request, timeout=timeout) as response:
@@ -85,7 +86,7 @@ def _download_json(url: str, timeout: float) -> dict:
 
 
 def _download_bytes(url: str, timeout: float) -> bytes:
-    request = Request(url, headers={"User-Agent": "SightFlow-Updater/1"})
+    request = Request(url, headers={"User-Agent": "JKWorld-Updater/1"})
     with urlopen(request, timeout=timeout) as response:
         return response.read()
 
@@ -101,6 +102,7 @@ def check_and_apply_updates(
     root: Path = APP_ROOT,
     log: LogFn = print,
 ) -> UpdateResult:
+    root = root.resolve()
     settings = load_update_settings(root)
     if not settings.get("enabled", True):
         return UpdateResult(False, installed_flow_version(root), 0, "Updates disabled")
@@ -247,32 +249,36 @@ def publish_bundle_to_git(
     log: LogFn = print,
     repository_root: Path | None = None,
 ) -> Path:
-    repository_root = repository_root or find_git_repository(root)
-    if repository_root is None:
-        raise RuntimeError(
-            "找不到 Git repository；請將 Studio 放在 SightFlow repo 裏面使用。"
-        )
-    manifest = prepare_published_bundle(
-        root,
-        version,
-        output_root=repository_root,
-    )
-    subprocess.run(["git", "add", "published"], cwd=repository_root, check=True)
-    status = subprocess.run(
-        ["git", "diff", "--cached", "--quiet"],
-        cwd=repository_root,
-        check=False,
-    )
-    if status.returncode == 0:
-        log("No Flow changes to publish.")
-        return manifest
+    del repository_root
+    manifest = prepare_published_bundle(root, version)
+    settings = load_update_settings(root)
+    distribution_repository = str(settings["distribution_repository"])
     flow_version = json.loads(manifest.read_text(encoding="utf-8"))["flow_version"]
-    subprocess.run(
-        ["git", "commit", "-m", f"publish flows {flow_version}"],
-        cwd=repository_root,
-        check=True,
-    )
-    subprocess.run(["git", "push"], cwd=repository_root, check=True)
+    with tempfile.TemporaryDirectory() as directory:
+        checkout = Path(directory) / "distribution"
+        subprocess.run(
+            ["git", "clone", distribution_repository, str(checkout)],
+            check=True,
+        )
+        destination = checkout / "published"
+        if destination.exists():
+            shutil.rmtree(destination)
+        shutil.copytree(root / "published", destination)
+        subprocess.run(["git", "add", "published"], cwd=checkout, check=True)
+        status = subprocess.run(
+            ["git", "diff", "--cached", "--quiet"],
+            cwd=checkout,
+            check=False,
+        )
+        if status.returncode == 0:
+            log("No Flow changes to publish.")
+            return manifest
+        subprocess.run(
+            ["git", "commit", "-m", f"publish flows {flow_version}"],
+            cwd=checkout,
+            check=True,
+        )
+        subprocess.run(["git", "push"], cwd=checkout, check=True)
     log(f"Published Flow version {flow_version}")
     return manifest
 
