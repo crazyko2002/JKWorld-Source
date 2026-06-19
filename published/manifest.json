@@ -1,7 +1,12 @@
 {
   "schema_version": 1,
-  "flow_version": "1.0.2",
-  "published_at": "2026-06-19T13:47:56.672445+00:00",
+  "flow_version": "1.0.3",
+  "published_at": "2026-06-19T13:50:20.134995+00:00",
+  "bundle": {
+    "source": "bundles/flow-1.0.3.zip",
+    "sha256": "2f959af33afacc47753472bf0a179012d6f49e51bd39a691835c286b91c9fd7b",
+    "size": 4334951
+  },
   "files": [
     {
       "path": "config.yaml",

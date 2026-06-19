@@ -24,6 +24,7 @@ def main() -> None:
         )
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         assert manifest["flow_version"] == "1.2.3"
+        assert manifest["bundle"]["source"] == "bundles/flow-1.2.3.zip"
         assert {item["path"] for item in manifest["files"]} >= {
             "config.yaml",
             "macro_config.yaml",
@@ -35,11 +36,9 @@ def main() -> None:
         (install / "update_settings.json").write_text(json.dumps({
             "manifest_url": "https://example.test/manifest.json",
         }), encoding="utf-8")
+        bundle_source = manifest["bundle"]["source"]
         payloads = {
-            item["source"]: (
-                root / "published" / item["source"]
-            ).read_bytes()
-            for item in manifest["files"]
+            bundle_source: (root / "published" / bundle_source).read_bytes()
         }
         original_json = distribution._download_json
         original_bytes = distribution._download_bytes

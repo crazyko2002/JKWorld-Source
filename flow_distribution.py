@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import argparse
+from io import BytesIO
 import hashlib
 import json
 import shutil
 import subprocess
 import tempfile
 import time
+import zipfile
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -100,6 +102,20 @@ def check_and_apply_updates(
     if not isinstance(files, list):
         raise ValueError("Invalid flow manifest")
     base_url = manifest_url.rsplit("/", 1)[0] + "/"
+    bundle = manifest.get("bundle")
+    bundle_files: dict[str, bytes] | None = None
+    if bundle:
+        bundle_url = base_url + quote(str(bundle["source"]), safe="/")
+        bundle_data = _download_bytes(bundle_url, timeout)
+        actual_bundle_hash = hashlib.sha256(bundle_data).hexdigest()
+        if actual_bundle_hash != str(bundle["sha256"]).lower():
+            raise ValueError("Flow bundle hash mismatch")
+        with zipfile.ZipFile(BytesIO(bundle_data)) as archive:
+            bundle_files = {
+                name: archive.read(name)
+                for name in archive.namelist()
+                if not name.endswith("/")
+            }
     changed: list[tuple[Path, bytes]] = []
     for item in files:
         relative = str(item["path"]).replace("\\", "/")
@@ -107,13 +123,13 @@ def check_and_apply_updates(
         target = _safe_target(root, relative)
         if target.exists() and sha256_file(target) == expected:
             continue
-        source_url = (
-            base_url
-            + quote(str(item["source"]), safe="/")
-            + "?v="
-            + quote(version)
-        )
-        data = _download_bytes(source_url, timeout)
+        if bundle_files is not None:
+            if relative not in bundle_files:
+                raise ValueError(f"Missing from Flow bundle: {relative}")
+            data = bundle_files[relative]
+        else:
+            source_url = base_url + quote(str(item["source"]), safe="/")
+            data = _download_bytes(source_url, timeout)
         actual = hashlib.sha256(data).hexdigest()
         if actual != expected:
             raise ValueError(f"Hash mismatch: {relative}")
@@ -170,10 +186,29 @@ def prepare_published_bundle(
                 "size": destination.stat().st_size,
             })
     flow_version = version or datetime.now(timezone.utc).strftime("%Y.%m.%d.%H%M%S")
+    bundles = published / "bundles"
+    bundles.mkdir()
+    safe_version = "".join(
+        char for char in flow_version if char.isalnum() or char in ".-_"
+    )
+    bundle_path = bundles / f"flow-{safe_version}.zip"
+    with zipfile.ZipFile(
+        bundle_path,
+        "w",
+        compression=zipfile.ZIP_DEFLATED,
+        compresslevel=9,
+    ) as archive:
+        for item in manifest_files:
+            archive.write(files_root / item["path"], arcname=item["path"])
     manifest = {
         "schema_version": 1,
         "flow_version": flow_version,
         "published_at": datetime.now(timezone.utc).isoformat(),
+        "bundle": {
+            "source": f"bundles/{bundle_path.name}",
+            "sha256": sha256_file(bundle_path),
+            "size": bundle_path.stat().st_size,
+        },
         "files": manifest_files,
     }
     manifest_path = published / "manifest.json"
