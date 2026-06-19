@@ -1,5 +1,6 @@
 {
   "enabled": true,
-  "manifest_url": "https://raw.githubusercontent.com/crazyko2002/SightFlow/main/published/manifest.json",
+  "manifest_url": "https://api.github.com/repos/crazyko2002/SightFlow/contents/published/manifest.json?ref=main",
+  "asset_base_url": "https://raw.githubusercontent.com/crazyko2002/SightFlow/main/published/",
   "timeout_seconds": 10
 }

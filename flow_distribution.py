@@ -24,8 +24,12 @@ from app_paths import APP_ROOT
 DEFAULT_SETTINGS = {
     "enabled": True,
     "manifest_url": (
+        "https://api.github.com/repos/crazyko2002/SightFlow/"
+        "contents/published/manifest.json?ref=main"
+    ),
+    "asset_base_url": (
         "https://raw.githubusercontent.com/"
-        "crazyko2002/SightFlow/main/published/manifest.json"
+        "crazyko2002/SightFlow/main/published/"
     ),
     "timeout_seconds": 10,
 }
@@ -64,7 +68,10 @@ def installed_flow_version(root: Path = APP_ROOT) -> str:
 
 
 def _download_json(url: str, timeout: float) -> dict:
-    request = Request(url, headers={"User-Agent": "SightFlow-Updater/1"})
+    request = Request(url, headers={
+        "User-Agent": "SightFlow-Updater/1",
+        "Accept": "application/vnd.github.raw+json",
+    })
     with urlopen(request, timeout=timeout) as response:
         return json.loads(response.read().decode("utf-8"))
 
@@ -101,7 +108,12 @@ def check_and_apply_updates(
     files = manifest.get("files", [])
     if not isinstance(files, list):
         raise ValueError("Invalid flow manifest")
-    base_url = manifest_url.rsplit("/", 1)[0] + "/"
+    base_url = str(
+        settings.get("asset_base_url")
+        or (manifest_url.rsplit("/", 1)[0] + "/")
+    )
+    if not base_url.endswith("/"):
+        base_url += "/"
     bundle = manifest.get("bundle")
     bundle_files: dict[str, bytes] | None = None
     if bundle:

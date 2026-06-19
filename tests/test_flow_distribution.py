@@ -35,6 +35,7 @@ def main() -> None:
         install.mkdir()
         (install / "update_settings.json").write_text(json.dumps({
             "manifest_url": "https://example.test/manifest.json",
+            "asset_base_url": "https://example.test/",
         }), encoding="utf-8")
         bundle_source = manifest["bundle"]["source"]
         payloads = {
