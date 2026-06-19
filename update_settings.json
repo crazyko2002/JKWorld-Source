@@ -1,0 +1,5 @@
+{
+  "enabled": true,
+  "manifest_url": "https://raw.githubusercontent.com/crazyko2002/SightFlow/main/published/manifest.json",
+  "timeout_seconds": 10
+}

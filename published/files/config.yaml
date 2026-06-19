@@ -1,0 +1,87 @@
+dry_run: false
+poll_interval_ms: 50
+region: null
+local_ocr:
+  region: null
+  digit_positions: {}
+  click_interval: 0.35
+  random_keypad:
+    capture_region: null
+    question_region: null
+    click_interval: 0.35
+  captcha:
+    template: templates/captcha_reference.png
+    threshold: 0.82
+    click_interval: 0.35
+rules:
+- name: '123'
+  enabled: true
+  template: templates/123.png
+  threshold: 0.9
+  consecutive_hits: 2
+  cooldown_seconds: 0.05
+  trigger: once_per_appearance
+  program:
+  - type: if
+    condition:
+      type: image
+      operator: appears
+      template: templates/condition_1781820526.png
+      threshold: 0.9
+    then:
+    - type: click
+      target: match
+    - type: move
+      delay: 0.0
+      backend: directinput
+      target: park
+      x: 0
+      y: 0
+      margin: 20
+      duration: 0.2
+    else: []
+  - type: if
+    condition:
+      type: image
+      operator: appears
+      template: templates/condition_1781821331.png
+      threshold: 0.6
+    then:
+    - type: press
+      delay: 1.0
+      backend: directinput
+      key: ctrl
+      presses: 45
+    - type: press
+      delay: 0.1
+      backend: directinput
+      key: z
+      presses: 2
+    - type: play_record
+      delay: 1.0
+      backend: directinput
+      recording_file: recordings/leaving_6.yaml
+      repeat_count: 1
+      repeat_delay: 0.0
+      speed_percent: 100.0
+    else: []
+- name: 驗證碼自動輸入
+  enabled: true
+  cooldown_seconds: 0.5
+  program:
+  - type: if
+    condition:
+      type: captcha
+      template: templates/captcha_reference.png
+      threshold: 0.82
+    then:
+    - type: ocr_keypad
+      mode: captcha
+      backend: directinput
+      click_interval: 0.35
+    - type: press
+      delay: 2.0
+      backend: directinput
+      key: enter
+      presses: 1
+    else: []
