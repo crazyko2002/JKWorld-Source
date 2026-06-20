@@ -7,7 +7,7 @@ import ctypes
 from datetime import datetime
 import threading
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
@@ -43,6 +43,7 @@ class RuleState:
     latched: bool = False
     last_triggered: float = 0.0
     started_at: float = 0.0
+    condition_state: dict[str, Any] = field(default_factory=dict)
 
 
 def make_dpi_aware() -> None:
@@ -116,17 +117,21 @@ def walk_conditions(nodes: list[dict[str, Any]]):
             continue
         condition = node.get("condition", {})
         yield condition
-        if condition.get("type") == "group":
-            yield from walk_condition_group(condition)
+        yield from walk_condition_group(condition)
         yield from walk_conditions(node.get("then", []))
         yield from walk_conditions(node.get("else", []))
 
 
 def walk_condition_group(condition: dict[str, Any]):
-    for child in condition.get("conditions", []):
+    children = []
+    if condition.get("type") == "group":
+        children = condition.get("conditions", [])
+    elif condition.get("type") == "scan_miss":
+        target = condition.get("target", condition.get("condition", {}))
+        children = [target] if isinstance(target, dict) else []
+    for child in children:
         yield child
-        if child.get("type") == "group":
-            yield from walk_condition_group(child)
+        yield from walk_condition_group(child)
 
 
 def image_paths_for_rule(rule: dict[str, Any]) -> set[str]:
@@ -146,6 +151,11 @@ def image_paths_for_rule(rule: dict[str, Any]) -> set[str]:
     elif rule.get("template"):
         paths.add(str(rule["template"]))
     return paths
+
+
+def scan_miss_target(condition: dict[str, Any]) -> dict[str, Any]:
+    target = condition.get("target", condition.get("condition", {}))
+    return target if isinstance(target, dict) else {}
 
 
 def load_templates(rules: list[dict[str, Any]]) -> dict[str, np.ndarray]:
@@ -482,6 +492,14 @@ def describe_condition(condition: dict[str, Any]) -> str:
         return "(" + joiner.join(
             describe_condition(child) for child in condition.get("conditions", [])
         ) + ")"
+    if kind == "scan_miss":
+        seconds = float(condition.get("seconds", 60))
+        cooldown = float(condition.get("cooldown_seconds", seconds))
+        target = scan_miss_target(condition)
+        return (
+            f"Scan miss {seconds:g}s: {describe_condition(target)} "
+            f"(cooldown {cooldown:g}s)"
+        )
     return "永遠成立"
 
 
@@ -515,6 +533,48 @@ def evaluate_condition(
             for child in children
         ]
         return all(checks) if condition.get("mode", "all") == "all" else any(checks)
+    if kind == "scan_miss":
+        target = scan_miss_target(condition)
+        if not target:
+            return False
+        now = float(context.get("now", time.monotonic()))
+        probe_context = dict(context)
+        target_found = evaluate_condition(
+            target, frame_gray, frame_bgr, templates,
+            offset_x, offset_y, started_at, probe_context,
+        )
+        condition_state = context.setdefault("condition_state", {})
+        state_key = f"scan_miss:{id(condition)}"
+        state = condition_state.setdefault(
+            state_key,
+            {"missing_since": None, "last_triggered": None},
+        )
+        if target_found:
+            state["missing_since"] = None
+            context["scan_miss_duration"] = 0.0
+            return False
+
+        missing_since = state.get("missing_since")
+        if missing_since is None:
+            missing_since = now
+            state["missing_since"] = missing_since
+        missing_duration = now - float(missing_since)
+        context["scan_miss_duration"] = missing_duration
+        required_seconds = max(0.0, float(condition.get("seconds", 60)))
+        if missing_duration < required_seconds:
+            return False
+
+        cooldown = max(0.0, float(condition.get(
+            "cooldown_seconds", required_seconds,
+        )))
+        last_triggered = state.get("last_triggered")
+        if (
+            last_triggered is not None
+            and now - float(last_triggered) < cooldown
+        ):
+            return False
+        state["last_triggered"] = now
+        return True
     if kind == "image":
         configured_path = str(condition.get("template", ""))
         template = templates.get(configured_path)
@@ -633,7 +693,9 @@ def execute_program(
     context: dict[str, Any] | None = None,
     engine_config: dict[str, Any] | None = None,
 ) -> None:
-    context = context or {"match_center": (0, 0)}
+    if context is None:
+        context = {}
+    context.setdefault("match_center", (0, 0))
     for node in nodes:
         if stop_event.is_set():
             return
@@ -734,6 +796,11 @@ def run_detector(
                                 gray, frame_bgr, templates,
                                 offset_x, offset_y, state.started_at,
                                 dry_run, stop_event, log,
+                                context={
+                                    "match_center": (0, 0),
+                                    "condition_state": state.condition_state,
+                                    "now": now,
+                                },
                                 engine_config=config,
                             )
                         except StopCurrentFlow:

@@ -66,7 +66,7 @@ class PlayerApp(ctk.CTk):
         self.flow_checkboxes: list[ctk.CTkCheckBox] = []
         self.selected_flow_indexes: set[int] = set()
         self.auto_dismiss = AutoDismissController(log=self.log)
-        self.auto_dismiss_enabled = ctk.BooleanVar(value=True)
+        self.auto_dismiss_enabled = ctk.BooleanVar(value=False)
         self.auto_dismiss_key = ctk.StringVar(value="esc")
         self.f10_latched = False
         self.listener = keyboard.Listener(
@@ -141,32 +141,6 @@ class PlayerApp(ctk.CTk):
             height=150,
         )
         self.flow_list.pack(fill="x", padx=22, pady=(0, 14))
-
-        dismiss_row = ctk.CTkFrame(card, fg_color="transparent")
-        dismiss_row.pack(fill="x", padx=22, pady=(0, 14))
-        ctk.CTkCheckBox(
-            dismiss_row,
-            text="Auto dismiss every 60s",
-            variable=self.auto_dismiss_enabled,
-            fg_color=ACCENT,
-            hover_color="#9ED438",
-            checkmark_color="#111510",
-            text_color=TEXT,
-            border_color="#52605A",
-        ).pack(side="left")
-        ctk.CTkSegmentedButton(
-            dismiss_row,
-            values=["esc", "enter"],
-            variable=self.auto_dismiss_key,
-            fg_color=CARD,
-            selected_color=ACCENT,
-            selected_hover_color="#9ED438",
-            unselected_color=CARD,
-            unselected_hover_color="#2C3439",
-            text_color=TEXT,
-            text_color_disabled=MUTED,
-            width=140,
-        ).pack(side="right")
 
         controls = ctk.CTkFrame(card, fg_color="transparent")
         controls.pack(fill="x", padx=22, pady=(0, 20))
@@ -353,11 +327,6 @@ class PlayerApp(ctk.CTk):
         runtime["rules"] = rules
         save_config(RUNTIME_CONFIG, runtime)
         self.stop_event = threading.Event()
-        self.auto_dismiss.start(
-            enabled=self.auto_dismiss_enabled.get(),
-            key=self.auto_dismiss_key.get(),
-            interval_seconds=60,
-        )
         self.worker = threading.Thread(
             target=self.run_worker,
             daemon=True,

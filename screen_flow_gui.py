@@ -336,7 +336,8 @@ class ActionDialog(ctk.CTkToplevel):
 
 class ConditionDialog(ctk.CTkToplevel):
     TYPES = [
-        "image", "captcha", "image_any", "time", "elapsed", "pixel", "group", "always",
+        "image", "captcha", "image_any", "scan_miss", "time",
+        "elapsed", "pixel", "group", "always",
     ]
 
     def __init__(
@@ -344,13 +345,25 @@ class ConditionDialog(ctk.CTkToplevel):
         master,
         condition: dict[str, Any] | None = None,
         simple_only: bool = False,
+        allowed_types: list[str] | None = None,
     ):
         super().__init__(master)
         self.result: dict[str, Any] | None = None
         self.original = copy.deepcopy(condition or {"type": "image"})
         self.group_conditions = copy.deepcopy(self.original.get("conditions", []))
         self.image_group = copy.deepcopy(self.original.get("templates", []))
+        self.scan_miss_target = copy.deepcopy(
+            self.original.get("target")
+            or self.original.get("condition")
+            or {
+                "type": "image",
+                "operator": "appears",
+                "template": "",
+                "threshold": 0.9,
+            }
+        )
         self.simple_only = simple_only
+        self.allowed_types = allowed_types
         self.title("Condition Editor")
         self.geometry("590x700")
         self.configure(fg_color=BG)
@@ -364,8 +377,13 @@ class ConditionDialog(ctk.CTkToplevel):
         )
         self.body = ctk.CTkFrame(self, fg_color=PANEL, corner_radius=12)
         self.body.pack(fill="both", expand=True, padx=24, pady=(0, 16))
-        values = [value for value in self.TYPES if not simple_only or value != "group"]
-        self.type_var = ctk.StringVar(value=self.original.get("type", values[0]))
+        values = allowed_types or [
+            value for value in self.TYPES if not simple_only or value != "group"
+        ]
+        initial_type = self.original.get("type", values[0])
+        if initial_type not in values:
+            initial_type = values[0]
+        self.type_var = ctk.StringVar(value=initial_type)
         packed_field(
             self.body, "Condition 類型",
             ctk.CTkOptionMenu(
@@ -470,6 +488,32 @@ class ConditionDialog(ctk.CTkToplevel):
                 command=self.browse_group_images,
                 fg_color=CARD, hover_color=LINE, text_color=TEXT,
             ).pack(side="left", fill="x", expand=True, padx=(4, 0))
+        elif kind == "scan_miss":
+            ctk.CTkLabel(
+                self.dynamic,
+                text=(
+                    "Trigger THEN only when the target image/captcha is missing "
+                    "for the configured time."
+                ),
+                justify="left", text_color=ACCENT,
+                font=("Microsoft JhengHei UI", 12),
+                wraplength=480,
+            ).pack(anchor="w", pady=(10, 5))
+            self.field("seconds", "Missing seconds before THEN", 60)
+            self.field("cooldown_seconds", "Cooldown seconds after trigger", 60)
+            label_widget(self.dynamic, "Target to scan").pack(
+                anchor="w", pady=(14, 5)
+            )
+            self.scan_miss_target_box = ctk.CTkFrame(
+                self.dynamic, fg_color="#111518",
+            )
+            self.scan_miss_target_box.pack(fill="x", pady=6)
+            self.render_scan_miss_target()
+            ctk.CTkButton(
+                self.dynamic, text="EDIT TARGET",
+                command=self.edit_scan_miss_target,
+                fg_color=CARD, hover_color=LINE, text_color=BLUE,
+            ).pack(fill="x", pady=8)
         elif kind == "time":
             self.option(
                 "operator", "判斷", ["after", "before", "between"], "after",
@@ -511,6 +555,30 @@ class ConditionDialog(ctk.CTkToplevel):
                 self.dynamic, text="此條件永遠成立。",
                 text_color=MUTED, font=("Microsoft JhengHei UI", 13),
             ).pack(pady=40)
+
+    def render_scan_miss_target(self) -> None:
+        for child in self.scan_miss_target_box.winfo_children():
+            child.destroy()
+        ctk.CTkLabel(
+            self.scan_miss_target_box,
+            text=describe_condition(self.scan_miss_target),
+            anchor="w",
+            text_color=TEXT,
+            wraplength=430,
+        ).pack(fill="x", padx=10, pady=10)
+
+    def edit_scan_miss_target(self) -> None:
+        self.grab_release()
+        dialog = ConditionDialog(
+            self,
+            self.scan_miss_target,
+            allowed_types=["image", "captcha", "image_any"],
+        )
+        self.wait_window(dialog)
+        self.grab_set()
+        if dialog.result:
+            self.scan_miss_target = dialog.result
+            self.render_scan_miss_target()
 
     def render_group(self) -> None:
         for child in self.group_box.winfo_children():
@@ -674,12 +742,19 @@ class ConditionDialog(ctk.CTkToplevel):
                     raise ValueError("Image Group 最少需要一張圖片")
                 result["threshold"] = float(self.vars["threshold"].get())
                 result["templates"] = list(self.image_group)
+            elif kind == "scan_miss":
+                result["seconds"] = max(0.0, float(self.vars["seconds"].get()))
+                result["cooldown_seconds"] = max(
+                    0.0,
+                    float(self.vars["cooldown_seconds"].get()),
+                )
+                result["target"] = copy.deepcopy(self.scan_miss_target)
             else:
                 for key, var in self.vars.items():
                     value: Any = var.get()
                     if key in {"x", "y", "r", "g", "b", "tolerance"}:
                         value = int(value)
-                    elif key in {"seconds", "threshold"}:
+                    elif key in {"seconds", "threshold", "cooldown_seconds"}:
                         value = float(value)
                     result[key] = value
                 if kind == "image" and not result.get("template"):
@@ -744,7 +819,7 @@ class FlowApp(ctk.CTk):
         self.worker: threading.Thread | None = None
         self.recorder_window = None
         self.auto_dismiss = AutoDismissController(log=self.log)
-        self.auto_dismiss_enabled = ctk.BooleanVar(value=True)
+        self.auto_dismiss_enabled = ctk.BooleanVar(value=False)
         self.auto_dismiss_key = ctk.StringVar(value="esc")
         self.f10_stop_latched = False
         self.emergency_listener = keyboard.Listener(
@@ -874,32 +949,6 @@ class FlowApp(ctk.CTk):
                 command=self.publish_flows,
             )
             self.publish_button.pack(side="right", padx=6)
-
-        dismiss_bar = ctk.CTkFrame(self, fg_color="transparent")
-        dismiss_bar.pack(fill="x", padx=22, pady=(0, 6))
-        ctk.CTkCheckBox(
-            dismiss_bar,
-            text="Auto dismiss every 60s",
-            variable=self.auto_dismiss_enabled,
-            fg_color=ACCENT,
-            hover_color="#9ED438",
-            checkmark_color="#111510",
-            text_color=TEXT,
-            border_color=LINE,
-        ).pack(side="left")
-        ctk.CTkSegmentedButton(
-            dismiss_bar,
-            values=["esc", "enter"],
-            variable=self.auto_dismiss_key,
-            fg_color=CARD,
-            selected_color=ACCENT,
-            selected_hover_color="#9ED438",
-            unselected_color=CARD,
-            unselected_hover_color=LINE,
-            text_color=TEXT,
-            text_color_disabled=MUTED,
-            width=140,
-        ).pack(side="left", padx=12)
 
         work = ctk.CTkFrame(self, fg_color="transparent")
         work.pack(fill="both", expand=True, padx=22, pady=4)
@@ -1328,6 +1377,18 @@ class FlowApp(ctk.CTk):
                 problem = self.validate_condition(child)
                 if problem:
                     return problem
+        if condition.get("type") == "scan_miss":
+            target = condition.get("target", condition.get("condition", {}))
+            if not isinstance(target, dict) or not target:
+                return "Scan miss target is empty"
+            if (
+                target.get("type") == "image"
+                and target.get("operator", "appears") != "appears"
+            ):
+                return "Scan miss target image must use appears"
+            problem = self.validate_condition(target)
+            if problem:
+                return problem
         return None
 
     def validate_program(self, nodes: list[dict[str, Any]]) -> str | None:
@@ -1359,11 +1420,6 @@ class FlowApp(ctk.CTk):
                 messagebox.showerror("未能啟動", f"Flow「{rule['name']}」：{problem}")
                 return
         self.stop_event = threading.Event()
-        self.auto_dismiss.start(
-            enabled=self.auto_dismiss_enabled.get(),
-            key=self.auto_dismiss_key.get(),
-            interval_seconds=60,
-        )
         self.worker = threading.Thread(
             target=self.run_worker, daemon=True, name="sightflow-engine",
         )
