@@ -14,6 +14,7 @@ import customtkinter as ctk
 from macro_recorder import list_recordings
 from pynput import keyboard
 
+from auto_dismiss import AutoDismissController
 from flow_distribution import publish_bundle_to_git
 from screen_detector_prototype import (
     ROOT,
@@ -742,6 +743,9 @@ class FlowApp(ctk.CTk):
         self.stop_event: threading.Event | None = None
         self.worker: threading.Thread | None = None
         self.recorder_window = None
+        self.auto_dismiss = AutoDismissController(log=self.log)
+        self.auto_dismiss_enabled = ctk.BooleanVar(value=True)
+        self.auto_dismiss_key = ctk.StringVar(value="esc")
         self.f10_stop_latched = False
         self.emergency_listener = keyboard.Listener(
             on_press=self.emergency_key_down,
@@ -870,6 +874,32 @@ class FlowApp(ctk.CTk):
                 command=self.publish_flows,
             )
             self.publish_button.pack(side="right", padx=6)
+
+        dismiss_bar = ctk.CTkFrame(self, fg_color="transparent")
+        dismiss_bar.pack(fill="x", padx=22, pady=(0, 6))
+        ctk.CTkCheckBox(
+            dismiss_bar,
+            text="Auto dismiss every 60s",
+            variable=self.auto_dismiss_enabled,
+            fg_color=ACCENT,
+            hover_color="#9ED438",
+            checkmark_color="#111510",
+            text_color=TEXT,
+            border_color=LINE,
+        ).pack(side="left")
+        ctk.CTkSegmentedButton(
+            dismiss_bar,
+            values=["esc", "enter"],
+            variable=self.auto_dismiss_key,
+            fg_color=CARD,
+            selected_color=ACCENT,
+            selected_hover_color="#9ED438",
+            unselected_color=CARD,
+            unselected_hover_color=LINE,
+            text_color=TEXT,
+            text_color_disabled=MUTED,
+            width=140,
+        ).pack(side="left", padx=12)
 
         work = ctk.CTkFrame(self, fg_color="transparent")
         work.pack(fill="both", expand=True, padx=22, pady=4)
@@ -1329,6 +1359,11 @@ class FlowApp(ctk.CTk):
                 messagebox.showerror("未能啟動", f"Flow「{rule['name']}」：{problem}")
                 return
         self.stop_event = threading.Event()
+        self.auto_dismiss.start(
+            enabled=self.auto_dismiss_enabled.get(),
+            key=self.auto_dismiss_key.get(),
+            interval_seconds=60,
+        )
         self.worker = threading.Thread(
             target=self.run_worker, daemon=True, name="sightflow-engine",
         )
@@ -1345,6 +1380,7 @@ class FlowApp(ctk.CTk):
             self.after(0, self.worker_finished)
 
     def worker_finished(self) -> None:
+        self._stop_auto_dismiss()
         self.status_label.configure(text="● STOPPED", text_color=MUTED)
         self.start_button.configure(state="normal")
         self.f10_stop_latched = False
@@ -1359,6 +1395,7 @@ class FlowApp(ctk.CTk):
             self.f10_stop_latched = True
             if self.stop_event:
                 self.stop_event.set()
+            self._stop_auto_dismiss()
             self.log("F10 緊急停止：正在停止所有 Flow。")
             self.after(
                 0,
@@ -1447,6 +1484,7 @@ class FlowApp(ctk.CTk):
     def stop(self) -> None:
         if self.stop_event:
             self.stop_event.set()
+            self._stop_auto_dismiss()
             self.status_label.configure(text="● STOPPING", text_color=ORANGE)
 
     def log(self, message: str) -> None:
@@ -1460,9 +1498,15 @@ class FlowApp(ctk.CTk):
 
     def on_close(self) -> None:
         self.stop()
+        self._stop_auto_dismiss()
         self.emergency_listener.stop()
         self.save_current(silent=True)
         self.destroy()
+
+    def _stop_auto_dismiss(self) -> None:
+        controller = self.__dict__.get("auto_dismiss")
+        if controller is not None:
+            controller.stop()
 
 
 if __name__ == "__main__":

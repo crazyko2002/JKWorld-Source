@@ -9,6 +9,7 @@ import customtkinter as ctk
 from pynput import keyboard
 
 from app_paths import APP_ROOT
+from auto_dismiss import AutoDismissController
 from flow_distribution import check_and_apply_updates, installed_flow_version
 from screen_detector_prototype import load_config, make_dpi_aware, run_detector, save_config
 
@@ -64,6 +65,9 @@ class PlayerApp(ctk.CTk):
         self.flow_names: list[str] = []
         self.flow_checkboxes: list[ctk.CTkCheckBox] = []
         self.selected_flow_indexes: set[int] = set()
+        self.auto_dismiss = AutoDismissController(log=self.log)
+        self.auto_dismiss_enabled = ctk.BooleanVar(value=True)
+        self.auto_dismiss_key = ctk.StringVar(value="esc")
         self.f10_latched = False
         self.listener = keyboard.Listener(
             on_press=self.emergency_key_down,
@@ -137,6 +141,32 @@ class PlayerApp(ctk.CTk):
             height=150,
         )
         self.flow_list.pack(fill="x", padx=22, pady=(0, 14))
+
+        dismiss_row = ctk.CTkFrame(card, fg_color="transparent")
+        dismiss_row.pack(fill="x", padx=22, pady=(0, 14))
+        ctk.CTkCheckBox(
+            dismiss_row,
+            text="Auto dismiss every 60s",
+            variable=self.auto_dismiss_enabled,
+            fg_color=ACCENT,
+            hover_color="#9ED438",
+            checkmark_color="#111510",
+            text_color=TEXT,
+            border_color="#52605A",
+        ).pack(side="left")
+        ctk.CTkSegmentedButton(
+            dismiss_row,
+            values=["esc", "enter"],
+            variable=self.auto_dismiss_key,
+            fg_color=CARD,
+            selected_color=ACCENT,
+            selected_hover_color="#9ED438",
+            unselected_color=CARD,
+            unselected_hover_color="#2C3439",
+            text_color=TEXT,
+            text_color_disabled=MUTED,
+            width=140,
+        ).pack(side="right")
 
         controls = ctk.CTkFrame(card, fg_color="transparent")
         controls.pack(fill="x", padx=22, pady=(0, 20))
@@ -323,6 +353,11 @@ class PlayerApp(ctk.CTk):
         runtime["rules"] = rules
         save_config(RUNTIME_CONFIG, runtime)
         self.stop_event = threading.Event()
+        self.auto_dismiss.start(
+            enabled=self.auto_dismiss_enabled.get(),
+            key=self.auto_dismiss_key.get(),
+            interval_seconds=60,
+        )
         self.worker = threading.Thread(
             target=self.run_worker,
             daemon=True,
@@ -344,6 +379,7 @@ class PlayerApp(ctk.CTk):
             self.after(0, self.worker_finished)
 
     def worker_finished(self) -> None:
+        self._stop_auto_dismiss()
         self.start_button.configure(state="normal")
         self.status_label.configure(
             text="STOPPED | F10 emergency stop",
@@ -354,6 +390,7 @@ class PlayerApp(ctk.CTk):
     def stop(self) -> None:
         if self.stop_event:
             self.stop_event.set()
+            self._stop_auto_dismiss()
             self.status_label.configure(text="STOPPING", text_color=ORANGE)
 
     def emergency_key_down(self, key) -> None:
@@ -383,9 +420,15 @@ class PlayerApp(ctk.CTk):
 
     def on_close(self) -> None:
         self.stop()
+        self._stop_auto_dismiss()
         self.listener.stop()
         RUNTIME_CONFIG.unlink(missing_ok=True)
         self.destroy()
+
+    def _stop_auto_dismiss(self) -> None:
+        controller = self.__dict__.get("auto_dismiss")
+        if controller is not None:
+            controller.stop()
 
 
 if __name__ == "__main__":
