@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import shutil
+import os
 from pathlib import Path
 
 import PyInstaller.__main__
@@ -18,6 +19,7 @@ ASSETS = (
     "recordings",
     "numpad",
 )
+APP_VERSION = os.environ.get("JKWORLD_APP_VERSION", "dev")
 
 
 def build(name: str, entrypoint: str, executable_name: str) -> Path:
@@ -50,6 +52,7 @@ def build(name: str, entrypoint: str, executable_name: str) -> Path:
         elif source.exists():
             destination.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(source, destination)
+    (output / ".app_version").write_text(APP_VERSION, encoding="utf-8")
     return output
 
 

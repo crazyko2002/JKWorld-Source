@@ -50,10 +50,32 @@ def main() -> None:
     execute_program(
         program, gray, bgr, {}, 0, 0, started, True,
         threading.Event(), logs.append,
+        engine_config={"verbose_scan_logs": True},
     )
     assert any("True" in line for line in logs)
     assert any("enter" in line for line in logs)
     assert not any("escape" in line for line in logs)
+
+    repeat_logs: list[str] = []
+    repeat_program = [{
+        "type": "repeat",
+        "times": 3,
+        "steps": [
+            {"type": "press", "key": "space"},
+            {
+                "type": "if",
+                "condition": {"type": "always"},
+                "then": [{"type": "press", "key": "tab"}],
+                "else": [],
+            },
+        ],
+    }]
+    execute_program(
+        repeat_program, gray, bgr, {}, 0, 0, started, True,
+        threading.Event(), repeat_logs.append,
+    )
+    assert sum("space" in line for line in repeat_logs) == 3
+    assert sum("tab" in line for line in repeat_logs) == 3
     print("Nested IF / ELSE logic OK")
 
 

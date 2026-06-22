@@ -9,6 +9,7 @@ import customtkinter as ctk
 from pynput import keyboard
 
 from app_paths import APP_ROOT
+from app_updater import check_and_prepare_app_update, installed_app_version
 from auto_dismiss import AutoDismissController
 from flow_distribution import check_and_apply_updates, installed_flow_version
 from screen_detector_prototype import load_config, make_dpi_aware, run_detector, save_config
@@ -90,7 +91,7 @@ class PlayerApp(ctk.CTk):
         ).pack(side="left")
         self.version_label = ctk.CTkLabel(
             header,
-            text=f"Flow {installed_flow_version()}",
+            text=self.version_text(),
             text_color=MUTED,
         )
         self.version_label.pack(side="right")
@@ -267,6 +268,12 @@ class PlayerApp(ctk.CTk):
             return
         self.flow_summary.configure(text="No enabled flows")
 
+    def version_text(self) -> str:
+        return (
+            f"App {installed_app_version(APP_ROOT)} | "
+            f"Flow {installed_flow_version(APP_ROOT)}"
+        )
+
     def toggle_flow(self, index: int) -> None:
         if index in self.selected_flow_indexes:
             self.selected_flow_indexes.remove(index)
@@ -294,13 +301,24 @@ class PlayerApp(ctk.CTk):
 
         def work():
             try:
+                app_result = check_and_prepare_app_update(APP_ROOT, self.log)
+                self.log(app_result.message)
+                if app_result.restart_required:
+                    self.after(
+                        0,
+                        lambda: self.update_button.configure(
+                            state="disabled", text="RESTARTING..."
+                        ),
+                    )
+                    self.after(500, self.destroy)
+                    return
                 result = check_and_apply_updates(APP_ROOT, self.log)
                 self.log(result.message)
                 self.after(0, self.reload_flows)
                 self.after(
                     0,
                     lambda: self.version_label.configure(
-                        text=f"Flow {result.version}"
+                        text=self.version_text()
                     ),
                 )
             except Exception as exc:

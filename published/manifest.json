@@ -1,24 +1,24 @@
 {
   "schema_version": 1,
-  "flow_version": "2.0.0",
-  "published_at": "2026-06-19T14:29:45.284274+00:00",
+  "flow_version": "v2.0.5",
+  "published_at": "2026-06-22T19:42:40.148351+00:00",
   "bundle": {
-    "source": "bundles/flow-2.0.0.zip",
-    "sha256": "cfe073cf4a6641d15ebbe13d2260075c86f99b5b93733f0f7c8094252a32d61b",
-    "size": 4334951
+    "source": "bundles/flow-v2.0.5.zip",
+    "sha256": "868b7136ad6a7b99a9361a84097bab11e884dd0dd1698cc4e8a6bd27f14f7b50",
+    "size": 9047452
   },
   "files": [
     {
       "path": "config.yaml",
       "source": "files/config.yaml",
-      "sha256": "b73601e24d57965070bbfbaace45cf82d6e4c6965cf3f42b4e48f7cb75dabcb7",
-      "size": 1787
+      "sha256": "3d186af516fb0c11d3c07d1eff9609f1c04eb45fb3344a6b2407af12bbddb20a",
+      "size": 8120
     },
     {
       "path": "macro_config.yaml",
       "source": "files/macro_config.yaml",
-      "sha256": "324945192fa6bdf6066f066d2614d9116850d7eaefd6a1e76568b396464c76cc",
-      "size": 4186
+      "sha256": "6756cec3cef54851018b16f91371280c32022475336c924e7ddd59fd5a33d3fa",
+      "size": 293
     },
     {
       "path": "templates/123.png",
@@ -91,6 +91,162 @@
       "source": "files/templates/condition_1781826303.png",
       "sha256": "4adff26a9c668ac22ffb639987c90bae0675a80869da86b704b59f38a348baef",
       "size": 454566
+    },
+    {
+      "path": "templates/condition_1781957456.png",
+      "source": "files/templates/condition_1781957456.png",
+      "sha256": "e207768decc847c027e480069ffb5d9e52ae700990ad5691b47b942d192a3784",
+      "size": 1653781
+    },
+    {
+      "path": "templates/condition_1782078592.png",
+      "source": "files/templates/condition_1782078592.png",
+      "sha256": "14ca3fae8094d3b323e91f80d2a2ad598cd183b5609de7891ede825c99aac717",
+      "size": 9389
+    },
+    {
+      "path": "templates/condition_1782078632.png",
+      "source": "files/templates/condition_1782078632.png",
+      "sha256": "aad2f09a7c89bb9548785b9689dfbab66a18a2393bc95a5786e6789ebd2b2294",
+      "size": 14881
+    },
+    {
+      "path": "templates/condition_1782078670.png",
+      "source": "files/templates/condition_1782078670.png",
+      "sha256": "187305e5f17678a195b10a0d0537795f3c1a60db7b07af118a2b416b65655972",
+      "size": 25273
+    },
+    {
+      "path": "templates/condition_1782079742.png",
+      "source": "files/templates/condition_1782079742.png",
+      "sha256": "83858fb0384af1399cf89bdd31c6c1aa74c7d00404c9478789b50ed846850ab1",
+      "size": 11959
+    },
+    {
+      "path": "templates/condition_1782079849.png",
+      "source": "files/templates/condition_1782079849.png",
+      "sha256": "d05d5cffe3ea87982da9f6621a5a7c588e99926e33f2681e69ac4b5ce0da20f8",
+      "size": 5607
+    },
+    {
+      "path": "templates/condition_1782079969.png",
+      "source": "files/templates/condition_1782079969.png",
+      "sha256": "45353389a895ae189011d4cc0a03d2fa2f56bcb3f71dbf969ae85ba6ec481519",
+      "size": 5796
+    },
+    {
+      "path": "templates/condition_1782080522.png",
+      "source": "files/templates/condition_1782080522.png",
+      "sha256": "0f7772c91167e1c3a0f1162b85e57c8b8c16550f256dd5d81b38a60f983e7e00",
+      "size": 5487
+    },
+    {
+      "path": "templates/condition_1782080571.png",
+      "source": "files/templates/condition_1782080571.png",
+      "sha256": "9109a0861b95e595d04b36149a73a46bbe55729671087d7c3b6df43058d6c952",
+      "size": 6114
+    },
+    {
+      "path": "templates/condition_1782082362.png",
+      "source": "files/templates/condition_1782082362.png",
+      "sha256": "da9c9b8dcc6e686f51b81f111173ce63a1d589d633dbb8e940d9338f91ecc8f9",
+      "size": 53721
+    },
+    {
+      "path": "templates/condition_1782082385.png",
+      "source": "files/templates/condition_1782082385.png",
+      "sha256": "95d51adddad29a26c5975e2c636f1f3dbdd3afbe3ff12c00fb8f9f76261f1206",
+      "size": 58553
+    },
+    {
+      "path": "templates/condition_1782085174.png",
+      "source": "files/templates/condition_1782085174.png",
+      "sha256": "71cf47557035753a12796155c2c78fb3c758e64dbd9a47e1bf8136bc58a9eacf",
+      "size": 10357
+    },
+    {
+      "path": "templates/condition_1782085334.png",
+      "source": "files/templates/condition_1782085334.png",
+      "sha256": "82dbee010c25cb3a89df28e668ec13ea1e60d58afde1ae0d19bb66f007c5d244",
+      "size": 4139
+    },
+    {
+      "path": "templates/condition_1782085431.png",
+      "source": "files/templates/condition_1782085431.png",
+      "sha256": "ffae89dac288b38f8662527f67c3c760f0b2719748f061d650c150631d8a895e",
+      "size": 2490
+    },
+    {
+      "path": "templates/condition_1782085539.png",
+      "source": "files/templates/condition_1782085539.png",
+      "sha256": "ded5d4e331d63d0efd5a17b71f6fbcf99762291756255ba9427d9e6cae80b6f8",
+      "size": 3046
+    },
+    {
+      "path": "templates/condition_1782085575.png",
+      "source": "files/templates/condition_1782085575.png",
+      "sha256": "3873ec045784e4164019ef10289a4146d7e0daacc4deabbaef092f3408d0c613",
+      "size": 11992
+    },
+    {
+      "path": "templates/group_1781957391851.png",
+      "source": "files/templates/group_1781957391851.png",
+      "sha256": "e7ffc89be3dd10340eda37e539c5f56c212a96cfa610c77207c5f937bb0e9983",
+      "size": 6996
+    },
+    {
+      "path": "templates/group_1781957406001.png",
+      "source": "files/templates/group_1781957406001.png",
+      "sha256": "273a5c8243f9b40c30a284808a92d83a7445eab9f9e8ef5355875494bbcebb51",
+      "size": 5785
+    },
+    {
+      "path": "templates/group_1781957471287.png",
+      "source": "files/templates/group_1781957471287.png",
+      "sha256": "3b3709e6c5f7ad39587d43fb332e8c99995029003319bc988466628d92def1c8",
+      "size": 1655452
+    },
+    {
+      "path": "templates/group_1781957490932.png",
+      "source": "files/templates/group_1781957490932.png",
+      "sha256": "66cde55744389d5895fa7a52226f1adf9a82a5b7bfc5cedbc66206037c643b39",
+      "size": 1131753
+    },
+    {
+      "path": "templates/group_1781957593082.png",
+      "source": "files/templates/group_1781957593082.png",
+      "sha256": "4357bda7b1e050a75335aa43845231b7452c8c442e1b54514d9040188f166b46",
+      "size": 34802
+    },
+    {
+      "path": "templates/group_1781957608851.png",
+      "source": "files/templates/group_1781957608851.png",
+      "sha256": "e340d1161659ac086656f64d6f477e6bc4dbada958d61afa0a2f6d087dc10a5f",
+      "size": 52443
+    },
+    {
+      "path": "templates/group_1781959568347.png",
+      "source": "files/templates/group_1781959568347.png",
+      "sha256": "59670e956cbb92d14a5a922b010c482a3508bc8b6e5d5efed81f10afe25d24b5",
+      "size": 52120
+    },
+    {
+      "path": "recordings/daily_1.yaml",
+      "source": "files/recordings/daily_1.yaml",
+      "sha256": "58012e48b7f1b5ed898d74c3d0325db59712195b0da8dc1d9b40a5c953d4510a",
+      "size": 364
+    },
+    {
+      "path": "recordings/keroro.yaml",
+      "source": "files/recordings/keroro.yaml",
+      "sha256": "9b2de69e41183e50d95df3186f60e34050c31a819b5cda641fbb21aafac01e8b",
+      "size": 12533
+    },
+    {
+      "path": "recordings/keroro_1.yaml",
+      "source": "files/recordings/keroro_1.yaml",
+      "sha256": "e141e2a616c28c0a17a119b0cfe365973c989e10c4041638cb2f0a0722fe057a",
+      "size": 18250
     },
     {
       "path": "recordings/latest_recording.yaml",

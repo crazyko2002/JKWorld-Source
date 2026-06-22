@@ -44,6 +44,11 @@ Studio 的 `PUBLISH` 按鈕會整理以上資料、建立 manifest、commit 並 
 .\.venv\Scripts\python.exe flow_distribution.py --prepare
 ```
 
+NoBrain also checks the latest GitHub Release for `JKWorld-NoBrain.zip`.
+If a newer packaged app is available, it downloads the ZIP, restarts, and
+updates engine/app files while keeping local flow data folders such as
+`config.yaml`, `templates/`, `recordings/`, and `numpad/`.
+
 ## GitHub build
 
 每次 push 到 `main`，GitHub Actions 會 build Player 和 Studio ZIP。

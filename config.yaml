@@ -14,7 +14,7 @@ local_ocr:
     threshold: 0.82
     click_interval: 0.35
 rules:
-- name: '123'
+- name: 逃離博物館 17speed
   enabled: true
   template: templates/123.png
   threshold: 0.9
@@ -24,22 +24,51 @@ rules:
   program:
   - type: if
     condition:
-      type: image
-      operator: appears
-      template: templates/condition_1781820526.png
-      threshold: 0.9
+      type: image_any
+      threshold: 0.85
+      templates:
+      - templates/group_1781957391851.png
+      - templates/group_1781957406001.png
     then:
     - type: click
-      target: match
-    - type: move
       delay: 0.0
       backend: directinput
-      target: park
+      target: match
       x: 0
       y: 0
-      margin: 20
-      duration: 0.2
-    else: []
+      clicks: 1
+      button: left
+    - type: if
+      condition:
+        type: image_any
+        threshold: 0.85
+        templates:
+        - templates/group_1781959568347.png
+      then:
+      - type: click
+        delay: 0.0
+        backend: directinput
+        target: match
+        x: 0
+        y: 0
+        clicks: 1
+        button: left
+      - type: press
+        delay: 3.0
+        backend: directinput
+        key: escape
+        presses: 1
+      else:
+      - type: press
+        delay: 0.0
+        backend: directinput
+        key: escape
+        presses: 2
+      - type: restart_flow
+        delay: 2.0
+    else:
+    - type: restart_flow
+      delay: 0.0
   - type: if
     condition:
       type: image
@@ -64,6 +93,8 @@ rules:
       repeat_count: 1
       repeat_delay: 0.0
       speed_percent: 100.0
+    - type: restart_flow
+      delay: 0.0
     else: []
 - name: 驗證碼自動輸入
   enabled: true
@@ -84,4 +115,287 @@ rules:
       backend: directinput
       key: enter
       presses: 1
+    else: []
+  - type: restart_flow
+    delay: 0.0
+- name: Keroro
+  enabled: true
+  cooldown_seconds: 0.05
+  program:
+  - type: if
+    condition:
+      type: image
+      operator: appears
+      template: templates/condition_1782078592.png
+      threshold: 0.9
+    then:
+    - type: click
+      delay: 0.0
+      backend: directinput
+      target: match
+      x: 0
+      y: 0
+      clicks: 1
+      button: left
+    else:
+    - type: if
+      condition:
+        type: image
+        operator: appears
+        template: templates/condition_1782079849.png
+        threshold: 0.9
+      then:
+      - type: click
+        delay: 0.0
+        backend: directinput
+        target: match
+        x: 0
+        y: 0
+        clicks: 1
+        button: left
+      else: []
+  - type: if
+    condition:
+      type: image
+      operator: appears
+      template: templates/condition_1782078632.png
+      threshold: 0.9
+    then:
+    - type: click
+      delay: 0.0
+      backend: directinput
+      target: match
+      x: 0
+      y: 0
+      clicks: 1
+      button: left
+    - type: press
+      delay: 1.0
+      backend: directinput
+      key: enter
+      presses: 1
+    else:
+    - type: goto_step
+      delay: 0.0
+      step: 3
+  - type: if
+    condition:
+      type: image
+      operator: appears
+      template: templates/condition_1782080571.png
+      threshold: 0.9
+    then:
+    - type: click
+      delay: 0.0
+      backend: directinput
+      target: match
+      x: 0
+      y: 0
+      clicks: 1
+      button: left
+    - type: press
+      delay: 1.0
+      backend: directinput
+      key: shift
+      presses: 1
+    else: []
+  - type: if
+    condition:
+      type: image
+      operator: appears
+      template: templates/condition_1782079969.png
+      threshold: 0.9
+    then:
+    - type: click
+      delay: 0.0
+      backend: directinput
+      target: match
+      x: 0
+      y: 0
+      clicks: 1
+      button: left
+    - type: press
+      delay: 1.0
+      backend: directinput
+      key: enter
+      presses: 1
+    - type: play_record
+      delay: 0.5
+      backend: directinput
+      recording_file: recordings/keroro_1.yaml
+      repeat_count: 1
+      repeat_delay: 0.5
+      speed_percent: 100.0
+    - type: press
+      delay: 0.5
+      backend: directinput
+      key: enter
+      presses: 1
+    - type: restart_flow
+      delay: 0.0
+    else: []
+- name: Daily event
+  enabled: true
+  cooldown_seconds: 0.05
+  program:
+  - type: repeat
+    times: 2
+    steps:
+    - type: if
+      condition:
+        type: image
+        operator: appears
+        template: templates/condition_1782082362.png
+        threshold: 0.9
+      then:
+      - type: click
+        delay: 0.0
+        backend: directinput
+        target: match
+        x: 0
+        y: 0
+        clicks: 1
+        button: left
+      - type: move
+        delay: 0.0
+        backend: directinput
+        target: park
+        x: 0
+        y: 0
+        margin: 20
+        duration: 0.2
+      else: []
+    - type: if
+      condition:
+        type: image
+        operator: appears
+        template: templates/condition_1781821331.png
+        threshold: 0.6
+      then:
+      - type: press
+        delay: 1.0
+        backend: directinput
+        key: ctrl
+        presses: 50
+      - type: press
+        delay: 0.1
+        backend: directinput
+        key: z
+        presses: 2
+      - type: play_record
+        delay: 1.0
+        backend: directinput
+        recording_file: recordings/leaving_6.yaml
+        repeat_count: 1
+        repeat_delay: 0.5
+        speed_percent: 100.0
+      else: []
+  - type: if
+    condition:
+      type: image
+      operator: appears
+      template: templates/condition_1782085174.png
+      threshold: 0.9
+    then:
+    - type: press
+      delay: 0.2
+      backend: directinput
+      key: enter
+      presses: 1
+    - type: play_record
+      delay: 3.0
+      backend: directinput
+      recording_file: recordings/daily_1.yaml
+      repeat_count: 1
+      repeat_delay: 0.5
+      speed_percent: 100.0
+    - type: press
+      delay: 0.0
+      backend: directinput
+      key: shift
+      presses: 1
+    else: []
+  - type: if
+    condition:
+      type: image
+      operator: appears
+      template: templates/condition_1782085334.png
+      threshold: 0.9
+    then:
+    - type: click
+      delay: 0.0
+      backend: directinput
+      target: match
+      x: 0
+      y: 0
+      clicks: 1
+      button: left
+    - type: press
+      delay: 0.5
+      backend: directinput
+      key: enter
+      presses: 2
+    else: []
+  - type: if
+    condition:
+      type: image
+      operator: appears
+      template: templates/condition_1782085431.png
+      threshold: 0.9
+    then:
+    - type: click
+      delay: 0.0
+      backend: directinput
+      target: match
+      x: 0
+      y: 0
+      clicks: 1
+      button: left
+    - type: press
+      delay: 1.0
+      backend: directinput
+      key: enter
+      presses: 1
+    - type: press
+      delay: 0.0
+      backend: directinput
+      key: escape
+      presses: 1
+    else: []
+  - type: if
+    condition:
+      type: image
+      operator: appears
+      template: templates/condition_1782085539.png
+      threshold: 0.9
+    then:
+    - type: click
+      delay: 0.0
+      backend: directinput
+      target: match
+      x: 0
+      y: 0
+      clicks: 1
+      button: left
+    - type: press
+      delay: 0.0
+      backend: directinput
+      key: enter
+      presses: 1
+    else: []
+  - type: if
+    condition:
+      type: image
+      operator: appears
+      template: templates/condition_1782085575.png
+      threshold: 0.9
+    then:
+    - type: click
+      delay: 0.0
+      backend: directinput
+      target: match
+      x: 0
+      y: 0
+      clicks: 1
+      button: left
     else: []

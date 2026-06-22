@@ -28,6 +28,12 @@ pydirectinput.FAILSAFE = True
 pydirectinput.PAUSE = 0.05
 LogFn = Callable[[str], None]
 
+try:
+    cv2.setNumThreads(1)
+    cv2.ocl.setUseOpenCL(False)
+except Exception:
+    pass
+
 
 class StopCurrentFlow(Exception):
     """Stop only the current flow iteration."""
@@ -37,13 +43,27 @@ class StopEngine(Exception):
     """Stop the complete automation engine."""
 
 
+class RestartFlow(Exception):
+    """Restart the current flow from its first program step."""
+
+
+class GotoStep(Exception):
+    """Jump the current flow to a 1-based top-level program step."""
+
+    def __init__(self, step: int) -> None:
+        super().__init__(step)
+        self.step = max(1, int(step))
+
+
 @dataclass
 class RuleState:
     hits: int = 0
     latched: bool = False
     last_triggered: float = 0.0
     started_at: float = 0.0
+    program_index: int = 0
     condition_state: dict[str, Any] = field(default_factory=dict)
+    repeat_state: dict[str, dict[str, int]] = field(default_factory=dict)
 
 
 def make_dpi_aware() -> None:
@@ -65,10 +85,19 @@ def load_config(path: Path) -> dict[str, Any]:
 
 
 def save_config(path: Path, config: dict[str, Any]) -> None:
-    with path.open("w", encoding="utf-8") as file:
-        yaml.safe_dump(
-            config, file, allow_unicode=True, sort_keys=False, default_flow_style=False
-        )
+    data = yaml.safe_dump(
+        config, allow_unicode=True, sort_keys=False, default_flow_style=False
+    )
+    try:
+        if path.exists() and path.read_text(encoding="utf-8") == data:
+            return
+    except Exception:
+        pass
+    path.write_text(data, encoding="utf-8")
+
+
+def verbose_scan_logs(config: dict[str, Any] | None) -> bool:
+    return bool((config or {}).get("verbose_scan_logs", False))
 
 
 def read_image(path: Path, flags: int = cv2.IMREAD_COLOR) -> np.ndarray | None:
@@ -113,13 +142,15 @@ def monitor_from_config(
 
 def walk_conditions(nodes: list[dict[str, Any]]):
     for node in nodes:
-        if node.get("type") != "if":
-            continue
-        condition = node.get("condition", {})
-        yield condition
-        yield from walk_condition_group(condition)
-        yield from walk_conditions(node.get("then", []))
-        yield from walk_conditions(node.get("else", []))
+        node_type = node.get("type")
+        if node_type == "if":
+            condition = node.get("condition", {})
+            yield condition
+            yield from walk_condition_group(condition)
+            yield from walk_conditions(node.get("then", []))
+            yield from walk_conditions(node.get("else", []))
+        elif node_type == "repeat":
+            yield from walk_conditions(node.get("steps", []))
 
 
 def walk_condition_group(condition: dict[str, Any]):
@@ -234,6 +265,15 @@ def run_actions(
                 return
 
         action_type = str(action.get("type", "wait"))
+        if action_type == "restart_flow":
+            log("  Restart Flow")
+            raise RestartFlow
+
+        if action_type == "goto_step":
+            step = max(1, int(action.get("step", 1)))
+            log(f"  Go to step {step}")
+            raise GotoStep(step)
+
         if action_type == "stop":
             scope = str(action.get("scope", "flow"))
             log("  STOP：停止整個 Engine" if scope == "engine" else "  STOP：停止目前 Flow")
@@ -412,6 +452,10 @@ def describe_action(action: dict[str, Any]) -> str:
             "停止整個 Engine" if action.get("scope", "flow") == "engine"
             else "停止目前 Flow"
         )
+    if kind == "restart_flow":
+        return "Restart Flow"
+    if kind == "goto_step":
+        return f"Go to step {int(action.get('step', 1))}"
     if kind == "play_record":
         recording_name = Path(
             str(action.get("recording_file", "latest"))
@@ -693,19 +737,22 @@ def execute_program(
     context: dict[str, Any] | None = None,
     engine_config: dict[str, Any] | None = None,
 ) -> None:
+    verbose = verbose_scan_logs(engine_config)
     if context is None:
         context = {}
     context.setdefault("match_center", (0, 0))
     for node in nodes:
         if stop_event.is_set():
             return
-        if node.get("type") == "if":
+        node_type = node.get("type")
+        if node_type == "if":
             result = evaluate_condition(
                 node.get("condition", {}),
                 frame_gray, frame_bgr, templates,
                 offset_x, offset_y, started_at, context,
             )
-            log(f"  IF {describe_condition(node.get('condition', {}))} → {result}")
+            if verbose:
+                log(f"  IF {describe_condition(node.get('condition', {}))} → {result}")
             if result and node.get("condition", {}).get("type") == "image_any":
                 log(
                     f"    命中圖片："
@@ -718,11 +765,140 @@ def execute_program(
                 offset_x, offset_y, started_at, dry_run,
                 stop_event, log, context, engine_config,
             )
+        elif node_type == "repeat":
+            times = max(0, int(node.get("times", 1)))
+            steps = node.get("steps", [])
+            for repeat_index in range(times):
+                if stop_event.is_set():
+                    return
+                if verbose:
+                    log(f"  REPEAT {repeat_index + 1}/{times}")
+                execute_program(
+                    steps, frame_gray, frame_bgr, templates,
+                    offset_x, offset_y, started_at, dry_run,
+                    stop_event, log, context, engine_config,
+                )
         else:
             run_actions(
                 [node], context.get("match_center", (0, 0)),
                 dry_run, stop_event, log, engine_config, context,
             )
+
+
+def execute_program_step(
+    node: dict[str, Any],
+    frame_gray: np.ndarray,
+    frame_bgr: np.ndarray,
+    templates: dict[str, np.ndarray],
+    offset_x: int,
+    offset_y: int,
+    started_at: float,
+    dry_run: bool,
+    stop_event: threading.Event,
+    log: LogFn,
+    context: dict[str, Any],
+    engine_config: dict[str, Any] | None = None,
+    repeat_state: dict[str, dict[str, int]] | None = None,
+    step_key: str = "root",
+) -> bool:
+    verbose = verbose_scan_logs(engine_config)
+    context.setdefault("match_center", (0, 0))
+    if node.get("type") == "repeat":
+        return execute_repeat_step(
+            node, frame_gray, frame_bgr, templates,
+            offset_x, offset_y, started_at, dry_run, stop_event,
+            log, context, engine_config, repeat_state, step_key,
+        )
+    if node.get("type") != "if":
+        run_actions(
+            [node], context.get("match_center", (0, 0)),
+            dry_run, stop_event, log, engine_config, context,
+        )
+        return True
+    result = evaluate_condition(
+        node.get("condition", {}),
+        frame_gray, frame_bgr, templates,
+        offset_x, offset_y, started_at, context,
+    )
+    if verbose:
+        log(f"  UNTIL {describe_condition(node.get('condition', {}))} -> {result}")
+    if result and node.get("condition", {}).get("type") == "image_any":
+        log(
+            f"    matched image: {Path(str(context.get('matched_image', ''))).name} "
+            f"({float(context.get('score', 0)):.1%})"
+        )
+    if not result and not node.get("else"):
+        return False
+    branch = node.get("then", []) if result else node.get("else", [])
+    execute_program(
+        branch, frame_gray, frame_bgr, templates,
+        offset_x, offset_y, started_at, dry_run,
+        stop_event, log, context, engine_config,
+    )
+    return True
+
+
+def execute_repeat_step(
+    node: dict[str, Any],
+    frame_gray: np.ndarray,
+    frame_bgr: np.ndarray,
+    templates: dict[str, np.ndarray],
+    offset_x: int,
+    offset_y: int,
+    started_at: float,
+    dry_run: bool,
+    stop_event: threading.Event,
+    log: LogFn,
+    context: dict[str, Any],
+    engine_config: dict[str, Any] | None = None,
+    repeat_state: dict[str, dict[str, int]] | None = None,
+    step_key: str = "root",
+) -> bool:
+    repeat_state = repeat_state if repeat_state is not None else {}
+    times = max(0, int(node.get("times", 1)))
+    steps = node.get("steps", [])
+    if times == 0 or not steps:
+        repeat_state.pop(step_key, None)
+        return True
+    state = repeat_state.setdefault(step_key, {"iteration": 0, "step": 0})
+    iteration = int(state.get("iteration", 0))
+    step_index = int(state.get("step", 0))
+    if iteration >= times:
+        repeat_state.pop(step_key, None)
+        return True
+    if step_index >= len(steps):
+        iteration += 1
+        step_index = 0
+        if iteration >= times:
+            repeat_state.pop(step_key, None)
+            return True
+        state["iteration"] = iteration
+        state["step"] = step_index
+    completed = execute_program_step(
+        steps[step_index],
+        frame_gray, frame_bgr, templates,
+        offset_x, offset_y, started_at, dry_run,
+        stop_event, log, context, engine_config, repeat_state,
+        f"{step_key}.{iteration}.{step_index}",
+    )
+    if completed:
+        state["step"] = step_index + 1
+        if state["step"] >= len(steps):
+            state["iteration"] = iteration + 1
+            state["step"] = 0
+        if state["iteration"] >= times:
+            repeat_state.pop(step_key, None)
+            return True
+    return False
+
+
+def flow_has_pending_work(rule: dict[str, Any], state: RuleState) -> bool:
+    program = rule.get("program")
+    if program is None:
+        return True
+    if state.repeat_state:
+        return True
+    return state.program_index < len(program)
 
 
 def capture_template(name: str, log: LogFn = print) -> Path | None:
@@ -770,7 +946,8 @@ def run_detector(
         for rule in rules
     }
     dry_run = bool(config.get("dry_run", True))
-    interval = max(float(config.get("poll_interval_ms", 50)) / 1000, 0.02)
+    interval = max(float(config.get("poll_interval_ms", 100)) / 1000, 0.05)
+    verbose = verbose_scan_logs(config)
     log(f"開始監察 {len(rules)} 個 Flow；測試模式={dry_run}")
 
     with mss.mss() as sct:
@@ -778,6 +955,12 @@ def run_detector(
             sct, config.get("region")
         )
         while not stop_event.is_set():
+            if not any(
+                flow_has_pending_work(rule, states[str(rule["name"])])
+                for rule in rules
+            ):
+                log("All selected flows completed.")
+                break
             frame_bgr = np.asarray(sct.grab(monitor))[:, :, :3]
             gray = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2GRAY)
             now = time.monotonic()
@@ -787,12 +970,16 @@ def run_detector(
                 name = str(rule["name"])
                 state = states[name]
                 if rule.get("program") is not None:
+                    program = rule.get("program", [])
+                    if state.program_index >= len(program):
+                        continue
                     cooldown = float(rule.get("cooldown_seconds", 0.5))
                     if now - state.last_triggered >= cooldown:
-                        log(f"執行 Flow「{name}」")
+                        if verbose:
+                            log(f"執行 Flow「{name}」")
                         try:
-                            execute_program(
-                                rule.get("program", []),
+                            completed = execute_program_step(
+                                program[state.program_index],
                                 gray, frame_bgr, templates,
                                 offset_x, offset_y, state.started_at,
                                 dry_run, stop_event, log,
@@ -802,7 +989,24 @@ def run_detector(
                                     "now": now,
                                 },
                                 engine_config=config,
+                                repeat_state=state.repeat_state,
+                                step_key=f"program.{state.program_index}",
                             )
+                            if completed:
+                                state.program_index += 1
+                        except RestartFlow:
+                            state.program_index = 0
+                            state.condition_state.clear()
+                            state.repeat_state.clear()
+                            state.started_at = time.monotonic()
+                            log(f"Flow {name} restarted")
+                        except GotoStep as jump:
+                            state.program_index = min(
+                                max(jump.step - 1, 0),
+                                max(len(program) - 1, 0),
+                            )
+                            state.repeat_state.clear()
+                            log(f"Flow {name} jumped to step {state.program_index + 1}")
                         except StopCurrentFlow:
                             log(f"Flow「{name}」已由 STOP 中止本輪。")
                         except StopEngine:

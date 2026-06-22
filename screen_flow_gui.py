@@ -7,7 +7,7 @@ import os
 import threading
 import time
 from pathlib import Path
-from tkinter import filedialog, messagebox
+from tkinter import filedialog, messagebox, simpledialog
 from typing import Any
 
 import customtkinter as ctk
@@ -29,6 +29,7 @@ from screen_detector_prototype import (
 
 
 CONFIG_PATH = ROOT / "config.yaml"
+RUNTIME_CONFIG = ROOT / ".studio_runtime.yaml"
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("dark-blue")
 
@@ -56,10 +57,48 @@ KEY_CHOICES = (
 )
 
 
+def enabled_rule_indexes(config: dict[str, Any]) -> list[int]:
+    return [
+        index
+        for index, rule in enumerate(config.get("rules", []))
+        if rule.get("enabled", True)
+    ]
+
+
+def flow_name(rule: dict[str, Any], index: int | None = None) -> str:
+    name = str(rule.get("name") or "").strip()
+    if name:
+        return name
+    if index is None:
+        return "Untitled Flow"
+    return f"Untitled Flow {index + 1}"
+
+
+def selected_runtime_rules(
+    config: dict[str, Any],
+    selected_indexes: set[int],
+) -> list[dict[str, Any]]:
+    return [
+        copy.deepcopy(rule)
+        for index, rule in enumerate(config.get("rules", []))
+        if index in selected_indexes and rule.get("enabled", True)
+    ]
+
+
+def runtime_config_for_selection(
+    config: dict[str, Any],
+    selected_indexes: set[int],
+) -> dict[str, Any]:
+    runtime = copy.deepcopy(config)
+    runtime["rules"] = selected_runtime_rules(config, selected_indexes)
+    return runtime
+
+
 class ActionDialog(ctk.CTkToplevel):
     TYPES = [
         "click", "press", "hotkey", "type", "wait", "move",
-        "play_record", "ocr_read", "ocr_click", "ocr_keypad", "stop",
+        "play_record", "ocr_read", "ocr_click", "ocr_keypad",
+        "goto_step", "restart_flow", "stop",
     ]
 
     def __init__(self, master, action: dict[str, Any] | None = None):
@@ -294,6 +333,8 @@ class ActionDialog(ctk.CTkToplevel):
                 "每次 click 間隔（秒；留空用 config 預設）",
                 self.original.get("click_interval", ""),
             )
+        elif kind == "goto_step":
+            self.dynamic_field("step", "Top-level step number", 1)
         elif kind == "stop":
             self.dynamic_field(
                 "scope", "停止範圍：flow 或 engine", "flow"
@@ -309,6 +350,7 @@ class ActionDialog(ctk.CTkToplevel):
                 value: Any = var.get()
                 if key in {
                     "x", "y", "clicks", "presses", "repeat_count", "margin",
+                    "step",
                 }:
                     value = int(value or 0)
                 elif key in {
@@ -815,12 +857,23 @@ class FlowApp(ctk.CTk):
         self.configure(fg_color=BG)
         self.config_data = self.load_and_migrate()
         self.selected_index = 0 if self.config_data["rules"] else -1
+        self.run_selected_indexes: set[int] = set(
+            enabled_rule_indexes(self.config_data)
+        )
+        self.flow_run_checkboxes: dict[int, ctk.CTkCheckBox] = {}
+        self.flow_run_summary: ctk.CTkLabel | None = None
         self.stop_event: threading.Event | None = None
         self.worker: threading.Thread | None = None
         self.recorder_window = None
         self.auto_dismiss = AutoDismissController(log=self.log)
         self.auto_dismiss_enabled = ctk.BooleanVar(value=False)
         self.auto_dismiss_key = ctk.StringVar(value="esc")
+        self.dragged_node: dict[str, Any] | None = None
+        self.flow_drop_zones: list[dict[str, Any]] = []
+        self.pending_log_messages: list[str] = []
+        self.log_flush_scheduled = False
+        self.log_line_count = 0
+        self.max_log_lines = 300
         self.f10_stop_latched = False
         self.emergency_listener = keyboard.Listener(
             on_press=self.emergency_key_down,
@@ -838,7 +891,7 @@ class FlowApp(ctk.CTk):
         except Exception:
             config = {}
         config.setdefault("dry_run", True)
-        config.setdefault("poll_interval_ms", 50)
+        config.setdefault("poll_interval_ms", 100)
         config.setdefault("region", None)
         config.setdefault("rules", [])
         config.setdefault("local_ocr", {
@@ -994,6 +1047,35 @@ class FlowApp(ctk.CTk):
 
     def build_sidebar(self) -> None:
         self.title_block(self.sidebar, "01", "FLOWS", "Independent programs")
+        run_header = ctk.CTkFrame(self.sidebar, fg_color="transparent")
+        run_header.pack(fill="x", padx=13, pady=(0, 8))
+        self.flow_run_summary = ctk.CTkLabel(
+            run_header,
+            text="0/0 selected",
+            text_color=MUTED,
+            font=("Bahnschrift", 11, "bold"),
+        )
+        self.flow_run_summary.pack(side="left")
+        ctk.CTkButton(
+            run_header,
+            text="ALL",
+            command=self.select_all_run_flows,
+            fg_color=CARD,
+            hover_color=LINE,
+            text_color=TEXT,
+            width=50,
+            height=26,
+        ).pack(side="right", padx=(6, 0))
+        ctk.CTkButton(
+            run_header,
+            text="CLEAR",
+            command=self.clear_run_flow_selection,
+            fg_color=CARD,
+            hover_color=LINE,
+            text_color=TEXT,
+            width=62,
+            height=26,
+        ).pack(side="right")
         self.flow_list = ctk.CTkScrollableFrame(
             self.sidebar, fg_color="transparent",
         )
@@ -1017,8 +1099,8 @@ class FlowApp(ctk.CTk):
         )
         body.pack(fill="both", expand=True, padx=16)
         self.name_var = ctk.StringVar()
-        self.cooldown_var = ctk.StringVar(value="0.05")
-        self.scan_interval_var = ctk.StringVar(value="50")
+        self.cooldown_var = ctk.StringVar(value="0.1")
+        self.scan_interval_var = ctk.StringVar(value="100")
         self.enabled_var = ctk.BooleanVar(value=True)
         self.dry_var = ctk.BooleanVar(value=True)
         label_widget(body, "Flow 名稱").pack(anchor="w", pady=(8, 5))
@@ -1082,22 +1164,76 @@ class FlowApp(ctk.CTk):
         ctk.CTkButton(
             footer, text="+ IF / ELSE", command=lambda: self.add_if([]),
             fg_color=BLUE, hover_color="#3595D7", text_color="#09141B",
+        ).pack(side="left", fill="x", expand=True, padx=4)
+        ctk.CTkButton(
+            footer, text="+ REPEAT", command=lambda: self.add_repeat([]),
+            fg_color=ORANGE, hover_color=LINE, text_color="#111510",
         ).pack(side="left", fill="x", expand=True, padx=(4, 0))
 
     def refresh_flow_list(self) -> None:
         for child in self.flow_list.winfo_children():
             child.destroy()
+        self.flow_run_checkboxes = {}
+        enabled_indexes = set(enabled_rule_indexes(self.config_data))
+        self.run_selected_indexes &= enabled_indexes
         for index, rule in enumerate(self.config_data["rules"]):
             selected = index == self.selected_index
+            row = ctk.CTkFrame(self.flow_list, fg_color="transparent")
+            row.pack(fill="x", pady=3)
+            checkbox = ctk.CTkCheckBox(
+                row,
+                text="RUN",
+                width=58,
+                command=lambda i=index: self.toggle_run_flow(i),
+                fg_color=ACCENT,
+                hover_color="#9ED438",
+                checkmark_color="#111510",
+                text_color=MUTED,
+                border_color=LINE,
+            )
+            checkbox.pack(side="left", padx=(0, 4))
+            if index in self.run_selected_indexes and rule.get("enabled", True):
+                checkbox.select()
+            else:
+                checkbox.deselect()
+            if not rule.get("enabled", True):
+                checkbox.configure(state="disabled")
+            self.flow_run_checkboxes[index] = checkbox
             ctk.CTkButton(
-                self.flow_list,
-                text=("● " if rule.get("enabled", True) else "○ ") + rule["name"],
-                anchor="w", height=42,
+                row,
+                text=("ON " if rule.get("enabled", True) else "OFF ") + rule["name"],
+                anchor="w",
+                height=42,
                 fg_color="#2B3428" if selected else "transparent",
                 hover_color=CARD,
                 text_color=ACCENT if selected else TEXT,
                 command=lambda i=index: self.select_flow(i),
-            ).pack(fill="x", pady=3)
+            ).pack(side="left", fill="x", expand=True)
+        self.refresh_run_summary()
+
+    def refresh_run_summary(self) -> None:
+        if self.flow_run_summary is None:
+            return
+        enabled_indexes = set(enabled_rule_indexes(self.config_data))
+        selected_count = len(self.run_selected_indexes & enabled_indexes)
+        self.flow_run_summary.configure(
+            text=f"{selected_count}/{len(enabled_indexes)} selected"
+        )
+
+    def toggle_run_flow(self, index: int) -> None:
+        if index in self.run_selected_indexes:
+            self.run_selected_indexes.remove(index)
+        else:
+            self.run_selected_indexes.add(index)
+        self.refresh_run_summary()
+
+    def select_all_run_flows(self) -> None:
+        self.run_selected_indexes = set(enabled_rule_indexes(self.config_data))
+        self.refresh_flow_list()
+
+    def clear_run_flow_selection(self) -> None:
+        self.run_selected_indexes.clear()
+        self.refresh_flow_list()
 
     def select_flow(self, index: int) -> None:
         self.save_current(silent=True)
@@ -1143,7 +1279,7 @@ class FlowApp(ctk.CTk):
         self.name_var.set(rule.get("name", ""))
         self.cooldown_var.set(str(rule.get("cooldown_seconds", 0.05)))
         self.scan_interval_var.set(
-            str(self.config_data.get("poll_interval_ms", 50))
+            str(self.config_data.get("poll_interval_ms", 100))
         )
         self.enabled_var.set(bool(rule.get("enabled", True)))
         self.dry_var.set(bool(self.config_data.get("dry_run", True)))
@@ -1158,7 +1294,7 @@ class FlowApp(ctk.CTk):
             rule["enabled"] = self.enabled_var.get()
             rule["cooldown_seconds"] = max(0.05, float(self.cooldown_var.get()))
             self.config_data["poll_interval_ms"] = max(
-                20, int(self.scan_interval_var.get())
+                50, int(self.scan_interval_var.get())
             )
             self.config_data["dry_run"] = self.dry_var.get()
             save_config(CONFIG_PATH, self.config_data)
@@ -1181,10 +1317,14 @@ class FlowApp(ctk.CTk):
         return sequence
 
     def render_program(self) -> None:
+        self.flow_drop_zones = []
         for child in self.program_scroll.winfo_children():
             child.destroy()
         rule = self.current_rule()
         if not rule or not rule.get("program"):
+            self.program_scroll._flow_path = []
+            self.program_scroll._flow_node_widgets = []
+            self.flow_drop_zones.append({"path": [], "widget": self.program_scroll})
             ctk.CTkLabel(
                 self.program_scroll,
                 text="EMPTY PROGRAM\n\n先加入 IF / ELSE 或 ACTION",
@@ -1202,11 +1342,18 @@ class FlowApp(ctk.CTk):
         path: list[tuple[int, str]],
         depth: int,
     ) -> None:
+        widgets = []
         for index, node in enumerate(sequence):
             if node.get("type") == "if":
-                self.render_if_node(parent, node, path, index, depth)
+                widget = self.render_if_node(parent, node, path, index, depth)
+            elif node.get("type") == "repeat":
+                widget = self.render_repeat_node(parent, node, path, index, depth)
             else:
-                self.render_action_node(parent, node, path, index, depth)
+                widget = self.render_action_node(parent, node, path, index, depth)
+            widgets.append((index, widget))
+        parent._flow_path = list(path)
+        parent._flow_node_widgets = widgets
+        self.flow_drop_zones.append({"path": list(path), "widget": parent})
 
     def node_tools(self, parent, path, index, edit_command) -> None:
         for symbol, command, color in [
@@ -1221,6 +1368,122 @@ class FlowApp(ctk.CTk):
                 text_color=color, command=command,
             ).pack(side="left", padx=1)
 
+    def attach_drag_handle(self, parent, widget, path, index) -> None:
+        handle = ctk.CTkButton(
+            parent, text="DRAG", width=48, height=28,
+            fg_color="transparent", hover_color=LINE, text_color=MUTED,
+        )
+        handle.pack(side="left", padx=(3, 1))
+        handle.bind(
+            "<ButtonPress-1>",
+            lambda event, p=list(path), i=index, w=widget: self.start_drag(p, i, w),
+        )
+        handle.bind("<ButtonRelease-1>", self.drop_drag)
+
+    def start_drag(self, path, index, widget) -> None:
+        self.dragged_node = {"path": path, "index": index, "widget": widget}
+        widget.configure(border_color=ORANGE)
+
+    def drop_drag(self, event) -> None:
+        drag = self.dragged_node
+        self.dragged_node = None
+        if not drag:
+            return
+        widget = drag.get("widget")
+        if widget is not None and widget.winfo_exists():
+            widget.configure(border_color=LINE)
+        target_path = self.drop_target_path(event.x_root, event.y_root)
+        if self.is_own_child_path(drag["path"], drag["index"], target_path):
+            return
+        target_index = self.drop_target_index(target_path, event.y_root)
+        self.move_node_to_path(
+            drag["path"], drag["index"], target_path, target_index,
+        )
+
+    def drop_target_index(self, path, y_root: int) -> int:
+        widgets = getattr(self.find_sequence_widget(path), "_flow_node_widgets", [])
+        if not widgets:
+            return 0
+        for index, widget in widgets:
+            midpoint = widget.winfo_rooty() + widget.winfo_height() // 2
+            if y_root < midpoint:
+                return index
+        return len(widgets)
+
+    def find_sequence_widget(self, path):
+        target = list(path)
+        stack = [self.program_scroll]
+        while stack:
+            widget = stack.pop()
+            if getattr(widget, "_flow_path", None) == target:
+                return widget
+            stack.extend(widget.winfo_children())
+        return self.program_scroll
+
+    def drop_target_path(self, x_root: int, y_root: int) -> list[tuple[int, str]]:
+        candidates: list[tuple[int, list[tuple[int, str]], Any]] = []
+        for zone in self.flow_drop_zones:
+            widget = zone["widget"]
+            if not widget.winfo_exists():
+                continue
+            left = widget.winfo_rootx()
+            top = widget.winfo_rooty()
+            right = left + widget.winfo_width()
+            bottom = top + widget.winfo_height()
+            if left <= x_root <= right and top <= y_root <= bottom:
+                path = list(zone["path"])
+                candidates.append((len(path), path, widget))
+        if candidates:
+            candidates.sort(key=lambda item: item[0], reverse=True)
+            return candidates[0][1]
+        return []
+
+    def is_descendant_path(
+        self,
+        target_path: list[tuple[int, str]],
+        source_prefix: list[tuple[int, str]],
+    ) -> bool:
+        if len(target_path) < len(source_prefix):
+            return False
+        for target_part, source_part in zip(target_path, source_prefix):
+            if target_part[0] != source_part[0]:
+                return False
+            if source_part[1] and target_part[1] != source_part[1]:
+                return False
+        return True
+
+    def is_own_child_path(self, source_path, source_index: int, target_path) -> bool:
+        source = self.sequence_at(source_path)
+        if not (0 <= source_index < len(source)):
+            return False
+        node_type = source[source_index].get("type")
+        child_paths = []
+        if node_type == "if":
+            child_paths = [
+                list(source_path) + [(source_index, "then")],
+                list(source_path) + [(source_index, "else")],
+            ]
+        elif node_type == "repeat":
+            child_paths = [list(source_path) + [(source_index, "steps")]]
+        return any(
+            self.is_descendant_path(list(target_path), child_path)
+            for child_path in child_paths
+        )
+
+    def reorder_node(self, path, old_index: int, new_index: int) -> None:
+        sequence = self.sequence_at(path)
+        if not sequence or old_index == new_index:
+            return
+        if not (0 <= old_index < len(sequence)):
+            return
+        node = sequence.pop(old_index)
+        if old_index < new_index:
+            new_index -= 1
+        new_index = max(0, min(new_index, len(sequence)))
+        sequence.insert(new_index, node)
+        self.render_program()
+        self.save_current(silent=True)
+
     def render_action_node(self, parent, action, path, index, depth) -> None:
         card = ctk.CTkFrame(
             parent, fg_color=CARD, border_width=1, border_color=LINE,
@@ -1228,7 +1491,7 @@ class FlowApp(ctk.CTk):
         )
         card.pack(fill="x", padx=(depth * 10, 0), pady=5)
         ctk.CTkLabel(
-            card, text="DO", width=44, text_color=ACCENT,
+            card, text=f"{index + 1}. DO", width=64, text_color=ACCENT,
             font=("Bahnschrift", 13, "bold"),
         ).pack(side="left", padx=(6, 0), pady=12)
         ctk.CTkLabel(
@@ -1241,6 +1504,8 @@ class FlowApp(ctk.CTk):
             tools, path, index,
             lambda: self.edit_action(path, index),
         )
+        self.attach_drag_handle(card, card, path, index)
+        return card
 
     def render_if_node(self, parent, node, path, index, depth) -> None:
         shell = ctk.CTkFrame(
@@ -1251,7 +1516,7 @@ class FlowApp(ctk.CTk):
         head = ctk.CTkFrame(shell, fg_color="#19262E", corner_radius=8)
         head.pack(fill="x", padx=6, pady=6)
         ctk.CTkLabel(
-            head, text="IF", width=42, text_color=BLUE,
+            head, text=f"{index + 1}. IF", width=64, text_color=BLUE,
             font=("Bahnschrift", 15, "bold"),
         ).pack(side="left", padx=(5, 0), pady=10)
         ctk.CTkLabel(
@@ -1265,6 +1530,7 @@ class FlowApp(ctk.CTk):
             tools, path, index,
             lambda: self.edit_condition(path, index),
         )
+        self.attach_drag_handle(head, shell, path, index)
         for branch, title, color in [
             ("then", "THEN — 條件成立", ACCENT),
             ("else", "ELSE — 條件不成立", ORANGE),
@@ -1276,6 +1542,12 @@ class FlowApp(ctk.CTk):
                 font=("Bahnschrift", 11, "bold"),
             ).pack(anchor="w", padx=10, pady=(8, 3))
             child_path = path + [(index, branch)]
+            branch_box._flow_path = list(child_path)
+            branch_box._flow_node_widgets = []
+            self.flow_drop_zones.append({
+                "path": list(child_path),
+                "widget": branch_box,
+            })
             children = node.setdefault(branch, [])
             if children:
                 self.render_sequence(
@@ -1296,7 +1568,70 @@ class FlowApp(ctk.CTk):
                 add_row, text="+ IF", height=28,
                 fg_color=CARD, hover_color=LINE, text_color=BLUE,
                 command=lambda p=child_path: self.add_if(p),
+            ).pack(side="left", padx=(0, 4))
+            ctk.CTkButton(
+                add_row, text="+ REPEAT", height=28,
+                fg_color=CARD, hover_color=LINE, text_color=ORANGE,
+                command=lambda p=child_path: self.add_repeat(p),
             ).pack(side="left")
+        return shell
+
+    def render_repeat_node(self, parent, node, path, index, depth) -> None:
+        shell = ctk.CTkFrame(
+            parent, fg_color="#171711", border_width=1,
+            border_color="#5C5A2A", corner_radius=10,
+        )
+        shell.pack(fill="x", padx=(depth * 10, 0), pady=7)
+        head = ctk.CTkFrame(shell, fg_color="#202013", corner_radius=8)
+        head.pack(fill="x", padx=6, pady=6)
+        ctk.CTkLabel(
+            head, text=f"{index + 1}. REPEAT", width=96,
+            text_color=ORANGE, font=("Bahnschrift", 14, "bold"),
+        ).pack(side="left", padx=(5, 0), pady=10)
+        ctk.CTkLabel(
+            head, text=f"{max(0, int(node.get('times', 1)))} times",
+            anchor="w", text_color=TEXT,
+            font=("Microsoft JhengHei UI", 12, "bold"),
+        ).pack(side="left", fill="x", expand=True, padx=5)
+        tools = ctk.CTkFrame(head, fg_color="transparent")
+        tools.pack(side="right", padx=5)
+        self.node_tools(
+            tools, path, index,
+            lambda: self.edit_repeat(path, index),
+        )
+        self.attach_drag_handle(head, shell, path, index)
+
+        child_path = path + [(index, "steps")]
+        children = node.setdefault("steps", [])
+        body = ctk.CTkFrame(shell, fg_color="#101518", corner_radius=8)
+        body.pack(fill="x", padx=12, pady=(2, 8))
+        body._flow_path = list(child_path)
+        body._flow_node_widgets = []
+        self.flow_drop_zones.append({"path": list(child_path), "widget": body})
+        if children:
+            self.render_sequence(body, children, child_path, depth + 1)
+        else:
+            ctk.CTkLabel(
+                body, text="No steps", text_color=MUTED,
+            ).pack(anchor="w", padx=12, pady=8)
+        add_row = ctk.CTkFrame(body, fg_color="transparent")
+        add_row.pack(fill="x", padx=8, pady=(2, 8))
+        ctk.CTkButton(
+            add_row, text="+ ACTION", height=28,
+            fg_color=CARD, hover_color=LINE, text_color=ACCENT,
+            command=lambda p=child_path: self.add_action(p),
+        ).pack(side="left", padx=(0, 4))
+        ctk.CTkButton(
+            add_row, text="+ IF", height=28,
+            fg_color=CARD, hover_color=LINE, text_color=BLUE,
+            command=lambda p=child_path: self.add_if(p),
+        ).pack(side="left", padx=(0, 4))
+        ctk.CTkButton(
+            add_row, text="+ REPEAT", height=28,
+            fg_color=CARD, hover_color=LINE, text_color=ORANGE,
+            command=lambda p=child_path: self.add_repeat(p),
+        ).pack(side="left")
+        return shell
 
     def add_action(self, path) -> None:
         if not self.current_rule():
@@ -1323,6 +1658,47 @@ class FlowApp(ctk.CTk):
             self.render_program()
             self.save_current(silent=True)
 
+    def add_repeat(self, path) -> None:
+        if not self.current_rule():
+            messagebox.showinfo("No Flow", "Create a Flow first.")
+            return
+        times = simpledialog.askinteger(
+            "Repeat",
+            "Repeat times",
+            initialvalue=2,
+            minvalue=0,
+            parent=self,
+        )
+        if times is None:
+            return
+        self.sequence_at(path).append({
+            "type": "repeat", "times": times, "steps": [],
+        })
+        self.render_program()
+        self.save_current(silent=True)
+
+    def move_node_to_path(
+        self,
+        source_path,
+        source_index: int,
+        target_path,
+        target_index: int,
+    ) -> None:
+        source = self.sequence_at(source_path)
+        target = self.sequence_at(target_path)
+        if not source or not (0 <= source_index < len(source)):
+            return
+        same_sequence = list(source_path) == list(target_path)
+        if same_sequence and source_index == target_index:
+            return
+        node = source.pop(source_index)
+        if same_sequence and source_index < target_index:
+            target_index -= 1
+        target_index = max(0, min(target_index, len(target)))
+        target.insert(target_index, node)
+        self.render_program()
+        self.save_current(silent=True)
+
     def edit_action(self, path, index) -> None:
         sequence = self.sequence_at(path)
         dialog = ActionDialog(self, sequence[index])
@@ -1340,6 +1716,23 @@ class FlowApp(ctk.CTk):
             sequence[index]["condition"] = dialog.result
             self.render_program()
             self.save_current(silent=True)
+
+    def edit_repeat(self, path, index) -> None:
+        sequence = self.sequence_at(path)
+        node = sequence[index]
+        times = simpledialog.askinteger(
+            "Repeat",
+            "Repeat times",
+            initialvalue=max(0, int(node.get("times", 1))),
+            minvalue=0,
+            parent=self,
+        )
+        if times is None:
+            return
+        node["times"] = times
+        node.setdefault("steps", [])
+        self.render_program()
+        self.save_current(silent=True)
 
     def remove_node(self, path, index) -> None:
         self.sequence_at(path).pop(index)
@@ -1403,6 +1796,12 @@ class FlowApp(ctk.CTk):
                 problem = self.validate_program(node.get("else", []))
                 if problem:
                     return problem
+            elif node.get("type") == "repeat":
+                if int(node.get("times", 1)) < 0:
+                    return "Repeat times must be 0 or more"
+                problem = self.validate_program(node.get("steps", []))
+                if problem:
+                    return problem
         return None
 
     def start(self) -> None:
@@ -1410,7 +1809,11 @@ class FlowApp(ctk.CTk):
             return
         if not self.save_current():
             return
-        active = [r for r in self.config_data["rules"] if r.get("enabled", True)]
+        runtime = runtime_config_for_selection(
+            self.config_data,
+            self.run_selected_indexes,
+        )
+        active = runtime.get("rules", [])
         if not active:
             messagebox.showerror("未能啟動", "最少要啟用一個 Flow。")
             return
@@ -1419,6 +1822,7 @@ class FlowApp(ctk.CTk):
             if problem:
                 messagebox.showerror("未能啟動", f"Flow「{rule['name']}」：{problem}")
                 return
+        save_config(RUNTIME_CONFIG, runtime)
         self.stop_event = threading.Event()
         self.worker = threading.Thread(
             target=self.run_worker, daemon=True, name="sightflow-engine",
@@ -1429,7 +1833,7 @@ class FlowApp(ctk.CTk):
 
     def run_worker(self) -> None:
         try:
-            run_detector(CONFIG_PATH, stop_event=self.stop_event, log=self.log)
+            run_detector(RUNTIME_CONFIG, stop_event=self.stop_event, log=self.log)
         except Exception as exc:
             self.log(f"ERROR: {exc}")
         finally:
@@ -1544,19 +1948,37 @@ class FlowApp(ctk.CTk):
             self.status_label.configure(text="● STOPPING", text_color=ORANGE)
 
     def log(self, message: str) -> None:
-        def append():
-            self.log_box.insert("end", f"> {message}\n")
-            self.log_box.see("end")
+        def queue():
+            self.pending_log_messages.append(str(message))
+            if not self.log_flush_scheduled:
+                self.log_flush_scheduled = True
+                self.after(100, self.flush_logs)
         if threading.current_thread() is threading.main_thread():
-            append()
+            queue()
         else:
-            self.after(0, append)
+            self.after(0, queue)
+
+    def flush_logs(self) -> None:
+        self.log_flush_scheduled = False
+        if not self.pending_log_messages:
+            return
+        messages = self.pending_log_messages
+        self.pending_log_messages = []
+        text = "".join(f"> {message}\n" for message in messages)
+        self.log_box.insert("end", text)
+        self.log_line_count += len(messages)
+        if self.log_line_count > self.max_log_lines:
+            excess = self.log_line_count - self.max_log_lines
+            self.log_box.delete("1.0", f"{excess + 1}.0")
+            self.log_line_count = self.max_log_lines
+        self.log_box.see("end")
 
     def on_close(self) -> None:
         self.stop()
         self._stop_auto_dismiss()
         self.emergency_listener.stop()
         self.save_current(silent=True)
+        RUNTIME_CONFIG.unlink(missing_ok=True)
         self.destroy()
 
     def _stop_auto_dismiss(self) -> None:

@@ -31,6 +31,12 @@ DEFAULT_SETTINGS = {
         "https://raw.githubusercontent.com/"
         "crazyko2002/JKWorld-Downloads/main/published/"
     ),
+    "app_update_enabled": True,
+    "app_release_api_url": (
+        "https://api.github.com/repos/"
+        "crazyko2002/JKWorld-Downloads/releases/latest"
+    ),
+    "nobrain_asset_name": "JKWorld-NoBrain.zip",
     "distribution_repository": "https://github.com/crazyko2002/JKWorld-Downloads.git",
     "timeout_seconds": 10,
 }
