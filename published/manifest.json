@@ -1,10 +1,10 @@
 {
   "schema_version": 1,
   "flow_version": "v2.0.5",
-  "published_at": "2026-06-22T19:42:40.148351+00:00",
+  "published_at": "2026-06-22T19:48:33.438555+00:00",
   "bundle": {
     "source": "bundles/flow-v2.0.5.zip",
-    "sha256": "868b7136ad6a7b99a9361a84097bab11e884dd0dd1698cc4e8a6bd27f14f7b50",
+    "sha256": "a769811d2d3a90f3c61e93db7261f3175b2a090b14918df7f1b8800a5ad0d750",
     "size": 9047452
   },
   "files": [

@@ -44,6 +44,7 @@ jobs:
           Compress-Archive -Path dist/JKWorldStudio/* -DestinationPath "JKWorld-Studio.zip"
 
       - uses: actions/upload-artifact@v4
+        continue-on-error: true
         with:
           name: JKWorld-Windows
           path: |
