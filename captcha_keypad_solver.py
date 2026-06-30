@@ -45,6 +45,7 @@ MIN_QUESTION_TOTAL_SCORE = 0.06
 MIN_WEIGHTED_VOTE_SCORE = 0.05
 MIN_WEIGHTED_HALF_TOTAL = 0.3
 CAPTCHA_MATCH_SCALES = (0.85, 0.9, 0.95, 1.0, 1.05, 1.1, 1.15)
+REPEATED_DIGIT_CLICK_INTERVAL = 0.45
 
 
 @dataclass(frozen=True)
@@ -585,14 +586,36 @@ def solve_captcha_match(
                 f"digit={answer[index - 1]} at ({screen_x}, {screen_y})"
             )
         click(x=screen_x, y=screen_y)
-        if click_interval > 0 and index < len(plan):
-            time.sleep(click_interval)
+        if index < len(plan):
+            interval = _effective_click_interval(
+                answer,
+                plan,
+                index - 1,
+                click_interval,
+            )
+            if interval > 0:
+                time.sleep(interval)
     return CaptchaSolveReport(
         answer=answer,
         keypad=keypad,
         match=match,
         elapsed_seconds=time.perf_counter() - started,
     )
+
+
+def _effective_click_interval(
+    answer: str,
+    plan: list[tuple[int, int]],
+    index: int,
+    configured_interval: float,
+) -> float:
+    if index + 1 >= len(plan):
+        return configured_interval
+    repeated_digit = answer[index] == answer[index + 1]
+    same_position = plan[index] == plan[index + 1]
+    if repeated_digit or same_position:
+        return max(configured_interval, REPEATED_DIGIT_CLICK_INTERVAL)
+    return configured_interval
 
 
 def read_captcha_match(match: CaptchaMatch) -> CaptchaReadReport:

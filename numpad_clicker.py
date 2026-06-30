@@ -18,6 +18,7 @@ from ocr_result_log import load_latest_ocr_result
 ROOT = APP_ROOT
 DEFAULT_NUMPAD_DIR = ROOT / "numpad"
 DEFAULT_THRESHOLD = 0.82
+REPEATED_DIGIT_CLICK_INTERVAL = 0.45
 EXTRA_BUTTONS = ("retry", "refresh", "reload")
 
 
@@ -166,14 +167,34 @@ def click_numpad_result(
             )
         click(x, y)
         clicks.append((digit, x, y))
-        if click_interval > 0 and index + 1 < len(plan):
-            time.sleep(click_interval)
+        if index + 1 < len(plan):
+            interval = _effective_click_interval(
+                plan,
+                index,
+                click_interval,
+            )
+            if interval > 0:
+                time.sleep(interval)
     return NumpadClickReport(
         result=result,
         positions=positions,
         clicks=tuple(clicks),
         elapsed_seconds=time.perf_counter() - started,
     )
+
+
+def _effective_click_interval(
+    plan: list[tuple[str, int, int]],
+    index: int,
+    configured_interval: float,
+) -> float:
+    if index + 1 >= len(plan):
+        return configured_interval
+    current_digit, current_x, current_y = plan[index]
+    next_digit, next_x, next_y = plan[index + 1]
+    if current_digit == next_digit or (current_x, current_y) == (next_x, next_y):
+        return max(configured_interval, REPEATED_DIGIT_CLICK_INTERVAL)
+    return configured_interval
 
 
 def click_from_ocr_log(

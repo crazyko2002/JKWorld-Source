@@ -19,6 +19,7 @@ from urllib.parse import quote
 from urllib.request import Request, urlopen
 
 from app_paths import APP_ROOT
+from version_utils import version_at_least
 
 
 DEFAULT_SETTINGS = {
@@ -39,9 +40,11 @@ DEFAULT_SETTINGS = {
     "nobrain_asset_name": "JKWorld-NoBrain.zip",
     "distribution_repository": "https://github.com/crazyko2002/JKWorld-Downloads.git",
     "timeout_seconds": 10,
+    "min_app_version": "",
 }
 PUBLISH_ITEMS = ("config.yaml", "macro_config.yaml", "templates", "recordings", "numpad")
 LogFn = Callable[[str], None]
+APP_VERSION_FILE = ".app_version"
 
 
 @dataclass(frozen=True)
@@ -72,6 +75,15 @@ def load_update_settings(root: Path = APP_ROOT) -> dict:
 def installed_flow_version(root: Path = APP_ROOT) -> str:
     path = root / ".flow_version"
     return path.read_text(encoding="utf-8").strip() if path.exists() else "0"
+
+
+def installed_app_version(root: Path = APP_ROOT) -> str:
+    path = root / APP_VERSION_FILE
+    return path.read_text(encoding="utf-8").strip() if path.exists() else "dev"
+
+
+def app_version_satisfies(root: Path, minimum: str) -> bool:
+    return version_at_least(installed_app_version(root), minimum)
 
 
 def find_git_repository(start: Path = APP_ROOT) -> Path | None:
@@ -121,6 +133,17 @@ def check_and_apply_updates(
     )
     version = str(manifest.get("flow_version", "0"))
     current = installed_flow_version(root)
+    min_app_version = str(manifest.get("min_app_version") or "").strip()
+    if min_app_version and not app_version_satisfies(root, min_app_version):
+        return UpdateResult(
+            False,
+            current,
+            0,
+            (
+                "Flow update requires app "
+                f"{min_app_version}; current app is {installed_app_version(root)}"
+            ),
+        )
     files = manifest.get("files", [])
     if not isinstance(files, list):
         raise ValueError("Invalid flow manifest")
@@ -184,6 +207,7 @@ def prepare_published_bundle(
     root: Path = APP_ROOT,
     version: str | None = None,
     output_root: Path | None = None,
+    min_app_version: str | None = None,
 ) -> Path:
     output_root = output_root or root
     published = output_root / "published"
@@ -233,6 +257,11 @@ def prepare_published_bundle(
     manifest = {
         "schema_version": 1,
         "flow_version": flow_version,
+        "min_app_version": (
+            min_app_version
+            if min_app_version is not None
+            else str(load_update_settings(root).get("min_app_version") or "")
+        ),
         "published_at": datetime.now(timezone.utc).isoformat(),
         "bundle": {
             "source": f"bundles/{bundle_path.name}",
@@ -254,9 +283,10 @@ def publish_bundle_to_git(
     version: str | None = None,
     log: LogFn = print,
     repository_root: Path | None = None,
+    min_app_version: str | None = None,
 ) -> Path:
     del repository_root
-    manifest = prepare_published_bundle(root, version)
+    manifest = prepare_published_bundle(root, version, min_app_version=min_app_version)
     settings = load_update_settings(root)
     distribution_repository = str(settings["distribution_repository"])
     flow_version = json.loads(manifest.read_text(encoding="utf-8"))["flow_version"]
@@ -294,11 +324,18 @@ def main() -> None:
     parser.add_argument("--prepare", action="store_true")
     parser.add_argument("--publish", action="store_true")
     parser.add_argument("--version")
+    parser.add_argument("--min-app-version")
     args = parser.parse_args()
     if args.publish:
-        path = publish_bundle_to_git(version=args.version)
+        path = publish_bundle_to_git(
+            version=args.version,
+            min_app_version=args.min_app_version,
+        )
     else:
-        path = prepare_published_bundle(version=args.version)
+        path = prepare_published_bundle(
+            version=args.version,
+            min_app_version=args.min_app_version,
+        )
     print(path.relative_to(APP_ROOT))
 
 

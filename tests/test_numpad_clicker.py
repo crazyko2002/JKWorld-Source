@@ -13,6 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from numpad_clicker import (  # noqa: E402
     build_digit_click_plan,
     click_from_ocr_log,
+    click_numpad_result,
     load_numpad_templates,
     locate_numpad_buttons,
 )
@@ -81,6 +82,27 @@ def main() -> None:
 
         payload = json.loads((log_dir / "ocr_latest.json").read_text(encoding="utf-8"))
         assert payload["result"] == "31"
+
+        sleeps: list[float] = []
+        clicks_11: list[tuple[int, int]] = []
+        original_sleep = numpad_module.time.sleep
+        numpad_module.time.sleep = sleeps.append
+        try:
+            report = click_numpad_result(
+                "11",
+                lambda x, y: clicks_11.append((x, y)),
+                numpad_dir=numpad_dir,
+                threshold=0.9,
+                click_interval=0.0,
+                log=lambda _: None,
+            )
+        finally:
+            numpad_module.time.sleep = original_sleep
+        assert report.result == "11"
+        assert [item[0] for item in report.clicks] == ["1", "1"]
+        assert len(clicks_11) == 2
+        assert clicks_11[0] == clicks_11[1]
+        assert sleeps and sleeps[0] >= 0.45
         print("Numpad click from OCR JSON OK")
 
 

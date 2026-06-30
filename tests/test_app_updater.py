@@ -12,6 +12,7 @@ def main() -> None:
     assert app_updater.should_update_app("v2.0.4", "v2.0.5")
     assert app_updater.should_update_app("2.0.4", "v2.1.0")
     assert not app_updater.should_update_app("v2.0.5", "v2.0.5")
+    assert not app_updater.should_update_app("v2.0.5", "v2.0.5.0")
     assert not app_updater.should_update_app("v2.1.0", "v2.0.9")
     assert not app_updater.should_update_app("dev", "v9.0.0")
 

@@ -7,7 +7,6 @@ import hashlib
 import json
 import os
 from pathlib import Path
-import re
 import shutil
 import subprocess
 import sys
@@ -17,6 +16,7 @@ from typing import Any, Callable
 from urllib.request import Request, urlopen
 
 from flow_distribution import load_update_settings
+from version_utils import should_update_version, version_numbers
 
 
 LogFn = Callable[[str], None]
@@ -56,18 +56,10 @@ def is_packaged_app() -> bool:
     return bool(getattr(sys, "frozen", False))
 
 
-def version_numbers(version: str) -> list[int]:
-    return [int(part) for part in re.findall(r"\d+", version)]
-
-
 def should_update_app(current: str, latest: str) -> bool:
-    current_numbers = version_numbers(current)
-    latest_numbers = version_numbers(latest)
-    if not current_numbers:
+    if not version_numbers(current):
         return False
-    if not latest_numbers:
-        return False
-    return latest_numbers > current_numbers
+    return should_update_version(current, latest)
 
 
 def _download_json(url: str, timeout: float) -> dict[str, Any]:

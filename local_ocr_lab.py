@@ -57,7 +57,11 @@ def normalize_one_digit(value: Any) -> str | None:
         "l": "1", "L": "1",
     }))
     digits = "".join(character for character in text if character.isdigit())
-    return digits if len(digits) == 1 else None
+    if len(digits) == 1:
+        return digits
+    if digits and len(set(digits)) == 1:
+        return digits[0]
+    return None
 
 
 def classify_one_digit(
@@ -65,11 +69,12 @@ def classify_one_digit(
     ocr,
     scales: tuple[int, ...] = (1, 2, 3, 4),
 ) -> str | None:
-    """Keypad-style single digit OCR: gray + Otsu + ddddocr."""
+    """Keypad-style single digit OCR with multi-scale majority voting."""
     if image.ndim == 3:
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     else:
         gray = image
+    votes: list[str] = []
     for scale in scales:
         height, width = gray.shape[:2]
         resized = cv2.resize(
@@ -85,8 +90,11 @@ def classify_one_digit(
                 ocr.classification(Image.fromarray(candidate))
             )
             if digit is not None:
-                return digit
-    return None
+                votes.append(digit)
+    if not votes:
+        return None
+    winner, _count = Counter(votes).most_common(1)[0]
+    return winner
 
 
 def red_channel_mask(

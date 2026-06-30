@@ -8,12 +8,24 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import local_ocr_lab  # noqa: E402
-from local_ocr_lab import read_two_digits, recognize_two_digits  # noqa: E402
+from local_ocr_lab import (  # noqa: E402
+    classify_one_digit,
+    read_two_digits,
+    recognize_two_digits,
+)
 
 
 class FakeOcr:
     def __init__(self):
         self.results = iter(["76", "76", "I6", "76", "7x"])
+
+    def classification(self, _image):
+        return next(self.results)
+
+
+class FakeOneDigitOcr:
+    def __init__(self):
+        self.results = iter(["7", "11", "I", "1", "1", "lll", "x", "1"])
 
     def classification(self, _image):
         return next(self.results)
@@ -37,6 +49,8 @@ def main() -> None:
         local_ocr_lab.get_ocr = original
     assert public_result.text == "76"
     assert public_result.confidence == 0.75
+    one_digit_image = np.zeros((20, 12), dtype=np.uint8)
+    assert classify_one_digit(one_digit_image, FakeOneDigitOcr()) == "1"
     print("Local OCR voting OK")
 
 

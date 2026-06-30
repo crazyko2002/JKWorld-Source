@@ -219,6 +219,19 @@ def find_template(
     return float(score), location
 
 
+def cached_find_template(
+    frame_gray: np.ndarray,
+    template: np.ndarray,
+    configured_path: str,
+    context: dict[str, Any],
+) -> tuple[float, tuple[int, int]]:
+    cache = context.setdefault("template_match_cache", {})
+    key = str(configured_path)
+    if key not in cache:
+        cache[key] = find_template(frame_gray, template)
+    return cache[key]
+
+
 def sleep_interruptibly(seconds: float, stop_event: threading.Event) -> bool:
     return stop_event.wait(max(0, seconds))
 
@@ -624,7 +637,9 @@ def evaluate_condition(
         template = templates.get(configured_path)
         if template is None:
             return False
-        score, (x, y) = find_template(frame_gray, template)
+        score, (x, y) = cached_find_template(
+            frame_gray, template, configured_path, context,
+        )
         matched = score >= float(condition.get("threshold", 0.9))
         if matched:
             context["match_center"] = (
@@ -673,7 +688,9 @@ def evaluate_condition(
             template = templates.get(configured_path)
             if template is None:
                 continue
-            score, location = find_template(frame_gray, template)
+            score, location = cached_find_template(
+                frame_gray, template, configured_path, context,
+            )
             if score > best_score:
                 best_score = score
                 best_match = (configured_path, template, location)
@@ -964,6 +981,7 @@ def run_detector(
             frame_bgr = np.asarray(sct.grab(monitor))[:, :, :3]
             gray = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2GRAY)
             now = time.monotonic()
+            frame_context: dict[str, Any] = {"now": now}
             for rule in rules:
                 if stop_event.is_set():
                     break
@@ -984,6 +1002,9 @@ def run_detector(
                                 offset_x, offset_y, state.started_at,
                                 dry_run, stop_event, log,
                                 context={
+                                    "template_match_cache": frame_context.setdefault(
+                                        "template_match_cache", {}
+                                    ),
                                     "match_center": (0, 0),
                                     "condition_state": state.condition_state,
                                     "now": now,
@@ -1019,7 +1040,12 @@ def run_detector(
 
                 configured_path = str(rule.get("template", ""))
                 template = templates[configured_path]
-                score, (match_x, match_y) = find_template(gray, template)
+                score, (match_x, match_y) = cached_find_template(
+                    gray,
+                    template,
+                    configured_path,
+                    frame_context,
+                )
                 threshold = float(rule.get("threshold", 0.9))
                 if score >= threshold:
                     state.hits += 1

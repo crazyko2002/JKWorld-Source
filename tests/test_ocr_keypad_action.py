@@ -8,6 +8,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import ocr_keypad_action as keypad_action
 import screen_detector_prototype as engine
+import captcha_keypad_solver
 from captcha_keypad_solver import CaptchaMatch, CaptchaReadReport
 
 
@@ -132,6 +133,30 @@ def main() -> None:
         "mode": "captcha",
         "backend": "directinput",
     })
+    sleeps: list[float] = []
+    clicks_11: list[dict] = []
+    original_read_match = captcha_keypad_solver.read_captcha_match
+    original_sleep = captcha_keypad_solver.time.sleep
+    captcha_keypad_solver.read_captcha_match = lambda _match: CaptchaReadReport(
+        answer="11",
+        keypad={"1": (12, 34)},
+        match=match,
+        elapsed_seconds=0.01,
+    )
+    captcha_keypad_solver.time.sleep = sleeps.append
+    try:
+        report = captcha_keypad_solver.solve_captcha_match(
+            match,
+            click=lambda **kwargs: clicks_11.append(kwargs),
+            click_interval=0.0,
+        )
+    finally:
+        captcha_keypad_solver.read_captcha_match = original_read_match
+        captcha_keypad_solver.time.sleep = original_sleep
+    assert report.answer == "11"
+    assert len(clicks_11) == 2
+    assert clicks_11[0] == clicks_11[1]
+    assert sleeps and sleeps[0] >= 0.45
     print("Advanced ocr_keypad captcha action OK")
 
 

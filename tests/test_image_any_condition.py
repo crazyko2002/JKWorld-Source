@@ -7,6 +7,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+import screen_detector_prototype as detector
 from screen_detector_prototype import evaluate_condition, image_paths_for_rule
 
 
@@ -54,6 +55,46 @@ def main() -> None:
     assert image_paths_for_rule(rule) == {
         "one.png", "two.png", "three.png",
     }
+
+    calls = 0
+    original_find_template = detector.find_template
+
+    def counted_find_template(frame_gray, template):
+        nonlocal calls
+        calls += 1
+        return original_find_template(frame_gray, template)
+
+    detector.find_template = counted_find_template
+    try:
+        cache_context = {}
+        image_condition = {
+            "type": "image",
+            "template": "two.png",
+            "threshold": 0.95,
+        }
+        assert evaluate_condition(
+            image_condition,
+            frame,
+            frame_bgr,
+            {"two.png": second},
+            10,
+            20,
+            0,
+            cache_context,
+        )
+        assert evaluate_condition(
+            image_condition,
+            frame,
+            frame_bgr,
+            {"two.png": second},
+            10,
+            20,
+            0,
+            cache_context,
+        )
+    finally:
+        detector.find_template = original_find_template
+    assert calls == 1
     print("Image Group any-match condition OK")
 
 
